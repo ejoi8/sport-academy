@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // 'guest' middleware alias — redirect authenticated users away from guest-only pages
+        // (login, register). Uses the 'web' guard and redirects to /account.
+        $middleware->redirectGuestsTo(fn () => route('public.login'));
+        $middleware->redirectUsersTo(fn () => route('public.account'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
