@@ -5,19 +5,28 @@ namespace Database\Seeders;
 use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
-use App\Models\Skill;
-use App\Models\SkillCategory;
 use App\Models\Sport;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
 
-class RunTrainingPocSeeder extends Seeder
+/**
+ * A lean, deterministic baseline: roles, the Football rubric, a coach login
+ * (coach@academy.test / password), two programs with one timeslot each, and a
+ * starter roster. Enough to log in and run a training session on a fresh DB.
+ */
+class BaselineSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call([
+            RoleSeeder::class,
+            RubricSeeder::class,
+        ]);
+
+        $sport = Sport::where('name', 'Football')->firstOrFail();
+
         $coach = User::firstOrCreate(
             ['email' => 'coach@academy.test'],
             [
@@ -26,38 +35,10 @@ class RunTrainingPocSeeder extends Seeder
                 'email_verified_at' => now(),
             ],
         );
-
-        // Shield super admin: its Gate::before checks hasRole('super_admin') on every panel request.
-        $coach->assignRole(Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']));
-        // Coach role so the coach appears in the Run Training coach dropdown (which filters to coaches).
-        $coach->assignRole(Role::firstOrCreate(['name' => 'coach', 'guard_name' => 'web']));
-
-        $sport = Sport::create(['name' => 'Football']);
-
-        // Rubric: categories -> skills (the columns the coach scores)
-        $rubric = [
-            'Technical' => ['Passing', 'Shooting', 'Dribbling', 'First touch'],
-            'Physical' => ['Speed', 'Stamina'],
-            'Mental' => ['Teamwork'],
-        ];
-
-        $sort = 0;
-        foreach ($rubric as $categoryName => $skillNames) {
-            $category = SkillCategory::create([
-                'sport_id' => $sport->id,
-                'name' => $categoryName,
-                'sort_order' => $sort++,
-            ]);
-
-            foreach ($skillNames as $skillName) {
-                Skill::create([
-                    'sport_id' => $sport->id,
-                    'skill_category_id' => $category->id,
-                    'name' => $skillName,
-                    'sort_order' => $sort++,
-                ]);
-            }
-        }
+        // super_admin: Gate::before grants the panel on every request.
+        // coach: so the user appears in the Run Training coach dropdown (which filters to coaches).
+        $coach->assignRole('super_admin');
+        $coach->assignRole('coach');
 
         $group = Program::create([
             'sport_id' => $sport->id,

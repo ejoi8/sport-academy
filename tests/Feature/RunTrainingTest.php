@@ -10,7 +10,7 @@ use App\Models\Skill;
 use App\Models\Student;
 use App\Models\TrainingSession;
 use App\Models\User;
-use Database\Seeders\RunTrainingPocSeeder;
+use Database\Seeders\BaselineSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -26,7 +26,7 @@ beforeEach(function () {
  */
 function runTrainingContext(): array
 {
-    test()->seed(RunTrainingPocSeeder::class);
+    test()->seed(BaselineSeeder::class);
 
     $coach = User::where('email', 'coach@academy.test')->firstOrFail();
     $offering = Offering::where('is_open', true)->has('enrollments')->firstOrFail();

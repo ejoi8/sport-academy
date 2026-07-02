@@ -8,7 +8,6 @@ use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
 use App\Models\Skill;
-use App\Models\SkillCategory;
 use App\Models\Sport;
 use App\Models\Student;
 use App\Models\TrainingSession;
@@ -18,7 +17,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 /**
  * Curated, scenario-tagged demo data.
@@ -52,10 +50,15 @@ class DemoSeeder extends Seeder
 
     public function run(): void
     {
-        $this->createRolesAndCoaches();
+        $this->call([
+            RoleSeeder::class,
+            RubricSeeder::class,
+        ]);
 
-        $sport = Sport::create(['name' => 'Football']);
-        $this->createRubric($sport);
+        $sport = Sport::where('name', 'Football')->firstOrFail();
+        $this->skills = Skill::query()->orderBy('sort_order')->get();
+
+        $this->createCoaches();
         $programs = $this->createPrograms($sport);
 
         $currentMonth = now()->startOfMonth();
@@ -103,12 +106,8 @@ class DemoSeeder extends Seeder
         $this->generateHistory($historyMonth, $historyPeriod);
     }
 
-    private function createRolesAndCoaches(): void
+    private function createCoaches(): void
     {
-        foreach (['admin', 'coach', 'parent', 'super_admin'] as $name) {
-            Role::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
-        }
-
         foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test'] as $name => $email) {
             $coach = User::firstOrCreate(
                 ['email' => $email],
@@ -118,25 +117,6 @@ class DemoSeeder extends Seeder
             $coach->assignRole('coach');
             $this->coaches[$name] = $coach;
         }
-    }
-
-    private function createRubric(Sport $sport): void
-    {
-        $rubric = [
-            'Technical' => ['Passing', 'Shooting', 'Dribbling', 'First touch'],
-            'Physical' => ['Speed', 'Stamina'],
-            'Mental' => ['Teamwork'],
-        ];
-
-        $sort = 0;
-        foreach ($rubric as $categoryName => $skillNames) {
-            $category = SkillCategory::create(['sport_id' => $sport->id, 'name' => $categoryName, 'sort_order' => $sort++]);
-            foreach ($skillNames as $skillName) {
-                Skill::create(['sport_id' => $sport->id, 'skill_category_id' => $category->id, 'name' => $skillName, 'sort_order' => $sort++]);
-            }
-        }
-
-        $this->skills = Skill::query()->orderBy('sort_order')->get();
     }
 
     /**

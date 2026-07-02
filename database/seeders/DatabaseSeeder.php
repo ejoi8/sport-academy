@@ -2,24 +2,20 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
-     * Seed the application's database.
+     * Seed a usable baseline: roles, a coach login (coach@academy.test / password),
+     * the Football rubric, a small catalog, and a starter roster.
+     *
+     * For richer, scenario-tagged data (multiple coaches, months of history and
+     * scores) run the demo set instead:
+     *   php artisan db:seed --class="Database\Seeders\DemoSeeder"
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->call(BaselineSeeder::class);
     }
 }

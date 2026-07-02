@@ -25,6 +25,16 @@ class Skill extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        // A skill's sport always follows its category, so admins never set it directly.
+        static::saving(function (Skill $skill): void {
+            if ($skill->skill_category_id && $skill->isDirty('skill_category_id')) {
+                $skill->sport_id = SkillCategory::whereKey($skill->skill_category_id)->value('sport_id');
+            }
+        });
+    }
+
     public function sport(): BelongsTo
     {
         return $this->belongsTo(Sport::class);
