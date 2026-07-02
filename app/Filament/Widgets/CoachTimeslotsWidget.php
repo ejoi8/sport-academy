@@ -15,7 +15,7 @@ class CoachTimeslotsWidget extends TableWidget
 {
     protected static ?int $sort = 6;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
 
     protected static ?string $heading = 'My timeslots — this month';
 

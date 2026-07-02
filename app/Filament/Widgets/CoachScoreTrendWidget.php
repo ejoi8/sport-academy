@@ -10,7 +10,7 @@ class CoachScoreTrendWidget extends ChartWidget
 {
     protected static ?int $sort = 7;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
 
     protected ?string $heading = 'My average score (1–5) — last 6 months';
 

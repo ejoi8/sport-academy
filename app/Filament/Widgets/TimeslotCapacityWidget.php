@@ -13,7 +13,7 @@ class TimeslotCapacityWidget extends TableWidget
 {
     protected static ?int $sort = 3;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
 
     protected static ?string $heading = 'Timeslot capacity — this month';
 

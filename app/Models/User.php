@@ -23,9 +23,8 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        // POC: any authenticated user may access the panel.
-        // Phase 1 will restrict this to Admin / Coach roles.
-        return true;
+        // The panel is staff-only. Parents live on the public site, never here.
+        return $this->hasAnyRole(['admin', 'coach', 'super_admin']);
     }
 
     /**
