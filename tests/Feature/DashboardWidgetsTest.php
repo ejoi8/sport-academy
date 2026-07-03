@@ -8,6 +8,7 @@ use App\Filament\Widgets\CoachTimeslotsWidget;
 use App\Filament\Widgets\EnrolmentsTrendWidget;
 use App\Filament\Widgets\FollowUpWidget;
 use App\Filament\Widgets\TimeslotCapacityWidget;
+use App\Filament\Widgets\UnusedCreditsWidget;
 use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\User;
@@ -105,4 +106,24 @@ it('gates each widget to the right roles', function () {
     foreach ([...$adminWidgets, ...$coachWidgets] as $widget) {
         expect($widget::canView())->toBeFalse();
     }
+});
+
+it('lists students with unused credits for staff, not parents', function () {
+    Livewire::test(UnusedCreditsWidget::class)->assertOk();
+
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $coach = User::factory()->create();
+    $coach->assignRole('coach');
+    $parent = User::factory()->create();
+    $parent->assignRole('parent');
+
+    $this->actingAs($admin);
+    expect(UnusedCreditsWidget::canView())->toBeTrue();
+
+    $this->actingAs($coach);
+    expect(UnusedCreditsWidget::canView())->toBeTrue();
+
+    $this->actingAs($parent);
+    expect(UnusedCreditsWidget::canView())->toBeFalse();
 });
