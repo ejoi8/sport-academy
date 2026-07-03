@@ -1,6 +1,8 @@
 # Design note — planned sessions, multi-weekday & unfinished-slot tracking
 
-**Status: proposed, not built.** Captures the direction so we build it deliberately. See
+**Status — Part A shipped; Parts B–D deferred.** Decided (2026-07-03) that the on-demand model
+plus Part A's credit indicators are enough, and planned scheduling adds too much to manage.
+Parts B–D are kept below as a record of the direction, **not** a backlog. See
 [domain-model.md](domain-model.md) for how things work today.
 
 ## The problem
@@ -21,7 +23,7 @@ These are three coupled pieces. Below, cheapest first.
 
 ---
 
-## Part A — Unfinished-slot list (do first; cheap, no schema change)
+## Part A — Unfinished-slot list ✅ shipped
 
 A report of students who still hold unused credits. **Fully derivable from existing data** —
 `sessions_included` minus consumed attendances (present/late/absent). No migration.
@@ -53,11 +55,14 @@ Enrollment::query()
   denormalise a `credits_used` counter on the enrolment (kept in sync when attendance is
   written) and filter on a plain column. Not needed for MVP.
 
-This part stands alone and could ship without any of the below.
+**Shipped** as the "Has credits remaining" + dynamic "Sessions attended" filters (plus a Month
+filter and sortable credits column) on the Enrolment resource, and the unused-credits dashboard
+widget. Implemented with a portable **correlated subquery** rather than `havingRaw` so it runs
+on SQLite (tests) as well as MySQL.
 
 ---
 
-## Part B — Multi-weekday offerings (schema)
+## Part B — Multi-weekday offerings (deferred)
 
 So a slot can place more than ~4 dates a month.
 
@@ -70,7 +75,7 @@ So a slot can place more than ~4 dates a month.
 
 ---
 
-## Part C — Planned sessions (the coach-facing schedule)
+## Part C — Planned sessions (deferred)
 
 Pre-create the month's dates so the coach opens *"Wednesday's class"* from a plan instead of
 creating it from scratch.
@@ -89,7 +94,7 @@ creating it from scratch.
 
 ---
 
-## Part D — `session_count` ↔ dates match check (soft)
+## Part D — `session_count` ↔ dates match check (deferred)
 
 When an offering is saved, if `session_count` ≠ the number of dates the schedule would
 generate for the month, **warn** (e.g. "8 credits but this schedule runs 4 sessions in Jul").
@@ -98,15 +103,15 @@ are entered by hand.
 
 ---
 
-## Suggested phasing
+## Phasing
 
-| Phase | Scope | Cost |
+| Phase | Scope | Status |
 |---|---|---|
-| **1** | Part A — unfinished-slot filter + widget | Small, no schema. Immediate value. |
-| **2** | Part B + C — multi-weekday, planned sessions, progress | Schema + Run Training rework. |
-| **3** | Part D — match-check warning | Small, follows B/C. |
+| **1** | Part A — unfinished-slot filter + widget | ✅ **shipped** |
+| **2** | Part B + C — multi-weekday, planned sessions, progress | **Deferred** — adds ongoing management |
+| **3** | Part D — match-check warning | **Deferred** (follows B/C) |
 
-## Open questions
+## Open questions (only relevant if B–D are ever revived)
 
 - Who triggers generation — a button on the offering, or auto when it's opened?
 - Can a coach reschedule / cancel a *planned* (un-run) session? (Likely yes — delete or move.)
