@@ -17,11 +17,14 @@
         </span>
 
         @if($row['type'] === 'enrolled')
-            <span class="rt-badge {{ $row['paid'] ? 'paid' : 'unpaid' }}">{{ $row['paid'] ? 'paid' : 'unpaid' }}</span>
+            @php($used = (int) ($row['credits_used'] ?? 0))
+            @php($totalCredits = (int) ($row['credits_total'] ?? 0))
+            <span class="rt-badge pay-{{ $row['payment_status'] }}">{{ $row['payment_status'] === 'active' ? 'paid' : $row['payment_status'] }}</span>
+            <span class="rt-badge credits {{ $totalCredits > 0 && $used >= $totalCredits ? 'over' : '' }}" title="Sessions used of paid credits">{{ $used }}/{{ $totalCredits }}</span>
         @elseif($row['type'] === 'make_up')
             <span class="rt-badge extra">make-up</span>
         @else
-            <span class="rt-badge extra">walk-in · RM{{ number_format(($row['fee_sen'] ?? 0) / 100, 2) }}</span>
+            <span class="rt-badge walkin">walk-in · RM{{ number_format(($row['fee_sen'] ?? 0) / 100, 2) }}</span>
         @endif
 
         <span class="rt-rowmeta">{{ $coachName ?? 'no coach' }} · {{ ucfirst($row['status']) }} · {{ $absent ? '—' : $scored.'/'.$total }}@if($fullyScored) <span class="rt-done">✓ done</span>@endif</span>

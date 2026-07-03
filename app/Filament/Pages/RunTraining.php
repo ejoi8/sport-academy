@@ -3,7 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Enums\AttendanceStatus;
-use App\Enums\EnrollmentStatus;
 use App\Enums\ParticipantType;
 use App\Enums\ScheduleType;
 use App\Models\AssessmentScore;
@@ -230,10 +229,11 @@ class RunTraining extends Page
         $this->headCoachId = $offering?->default_coach_id;
         $this->bulkCoachId = $this->headCoachId;
 
-        // 1. Enrolled roster for this timeslot.
+        // 1. Enrolled roster for this timeslot, with each enrolment's saved credit usage.
         Enrollment::query()
             ->where('offering_id', $this->offeringId)
             ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->with('student')
             ->get()
             ->each(function (Enrollment $enrollment): void {
@@ -244,7 +244,12 @@ class RunTraining extends Page
                 $this->roster['s'.$enrollment->student_id] = $this->makeRow(
                     $enrollment->student,
                     ParticipantType::Enrolled->value,
-                    paid: $enrollment->status === EnrollmentStatus::Active,
+                    [
+                        'payment_status' => $enrollment->status->value,
+                        'credits_used' => (int) $enrollment->used_credits,
+                        'credits_total' => $enrollment->sessions_included,
+                        'enrollment_id' => $enrollment->id,
+                    ],
                 );
             });
 
@@ -271,7 +276,10 @@ class RunTraining extends Page
                 $this->roster[$key] = $this->makeRow(
                     $attendance->student,
                     $attendance->participant_type->value,
-                    feeSen: $attendance->walk_in_fee_sen,
+                    [
+                        'fee_sen' => $attendance->walk_in_fee_sen,
+                        'enrollment_id' => $attendance->enrollment_id,
+                    ],
                 );
             }
 
@@ -279,6 +287,7 @@ class RunTraining extends Page
             $this->roster[$key]['status'] = $attendance->status->value;
             $this->roster[$key]['coach_id'] = $attendance->coach_id;
             $this->roster[$key]['note'] = $attendance->note ?? '';
+            $this->roster[$key]['enrollment_id'] = $attendance->enrollment_id;
 
             foreach ($attendance->scores as $score) {
                 $this->roster[$key]['scores'][$score->skill_id] = $score->score;
@@ -289,21 +298,24 @@ class RunTraining extends Page
     /**
      * @return array<string, mixed>
      */
-    protected function makeRow(Student $student, string $type, ?bool $paid = null, ?int $feeSen = null): array
+    protected function makeRow(Student $student, string $type, array $meta = []): array
     {
-        return [
+        return array_merge([
             'student_id' => $student->id,
             'name' => $student->name,
             'type' => $type,
-            'paid' => $paid,
+            'payment_status' => null,   // enrolment status: active|pending|overdue
+            'credits_used' => null,     // credits already consumed on the source enrolment
+            'credits_total' => null,    // the source enrolment's session count
+            'enrollment_id' => null,    // which enrolment this row consumes a credit from
             'coach_id' => $this->headCoachId,
             'status' => AttendanceStatus::Present->value,
             'scores' => $this->skills->mapWithKeys(fn (Skill $skill): array => [$skill->id => null])->all(),
             'note' => '',
-            'fee_sen' => $feeSen,
+            'fee_sen' => null,
             'phone' => null,
             'ic' => $student->ic_number,
-        ];
+        ], $meta);
     }
 
     public function toggle(string $key): void
@@ -374,20 +386,21 @@ class RunTraining extends Page
         return Student::query()
             ->where(fn ($query) => $query->where('name', 'like', "%{$term}%")->orWhere('ic_number', 'like', "%{$term}%"))
             ->whereNotIn('id', $onRoster)
-            ->with(['enrollments' => fn ($query) => $query->whereIn('status', ['active', 'pending', 'overdue'])->with('offering.program')])
             ->limit(10)
             ->get()
             ->map(function (Student $student): array {
-                $active = $student->enrollments->first();
+                // Make-up only if they still hold a live credit; otherwise a paying walk-in.
+                $makeUp = $student->liveCreditEnrollment();
 
                 return [
                     'id' => $student->id,
                     'name' => $student->name,
                     'ic' => $student->ic_number,
                     'age' => $student->age,
-                    'program' => $active?->offering?->program?->name,
-                    'type' => $active ? ParticipantType::MakeUp->value : ParticipantType::WalkIn->value,
-                    'fee_sen' => $active ? null : $this->walkInFeeSen,
+                    'program' => $makeUp?->offering?->program?->name,
+                    'type' => $makeUp ? ParticipantType::MakeUp->value : ParticipantType::WalkIn->value,
+                    'fee_sen' => $makeUp ? null : $this->walkInFeeSen,
+                    'credits_left' => $makeUp?->creditsRemaining(),
                 ];
             })
             ->all();
@@ -430,18 +443,24 @@ class RunTraining extends Page
             return;
         }
 
-        $student = Student::with(['enrollments' => fn ($query) => $query->whereIn('status', ['active', 'pending', 'overdue'])])->find($studentId);
+        $student = Student::find($studentId);
 
         if (! $student) {
             return;
         }
 
-        $isMakeUp = $student->enrollments->isNotEmpty();
+        // Make-up only if they still hold a live credit; otherwise a paying walk-in.
+        $makeUp = $student->liveCreditEnrollment();
 
         $this->roster[$key] = $this->makeRow(
             $student,
-            $isMakeUp ? ParticipantType::MakeUp->value : ParticipantType::WalkIn->value,
-            feeSen: $isMakeUp ? null : $this->walkInFeeSen,
+            $makeUp ? ParticipantType::MakeUp->value : ParticipantType::WalkIn->value,
+            [
+                'fee_sen' => $makeUp ? null : $this->walkInFeeSen,
+                'enrollment_id' => $makeUp?->id,
+                'credits_used' => $makeUp?->creditsUsed(),
+                'credits_total' => $makeUp?->sessions_included,
+            ],
         );
 
         $this->expandedKey = $key;
@@ -468,7 +487,10 @@ class RunTraining extends Page
             'student_id' => null,
             'name' => trim($this->newName),
             'type' => ParticipantType::WalkIn->value,
-            'paid' => null,
+            'payment_status' => null,
+            'credits_used' => null,
+            'credits_total' => null,
+            'enrollment_id' => null,
             'coach_id' => $this->headCoachId,
             'status' => AttendanceStatus::Present->value,
             'scores' => $this->skills->mapWithKeys(fn (Skill $skill): array => [$skill->id => null])->all(),
@@ -642,18 +664,47 @@ class RunTraining extends Page
         $isWalkIn = $row['type'] === ParticipantType::WalkIn->value;
         $isAbsent = $this->isAbsentStatus($row['status']);
 
-        return Attendance::updateOrCreate(
-            ['training_session_id' => $session->id, 'student_id' => $studentId],
-            [
-                'participant_type' => $row['type'],
-                'status' => $row['status'],
-                'coach_id' => ! empty($row['coach_id']) ? (int) $row['coach_id'] : null,
-                // A walk-in only pays a fee when they actually attended.
-                'walk_in_fee_sen' => ($isWalkIn && ! $isAbsent) ? ($row['fee_sen'] ?? null) : null,
-                'note' => filled($row['note'] ?? null) ? $row['note'] : null,
-                'marked_by' => Auth::id(),
-            ],
-        );
+        $attendance = Attendance::firstOrNew([
+            'training_session_id' => $session->id,
+            'student_id' => $studentId,
+        ]);
+
+        $attendance->fill([
+            'participant_type' => $row['type'],
+            'status' => $row['status'],
+            'coach_id' => ! empty($row['coach_id']) ? (int) $row['coach_id'] : null,
+            // A walk-in only pays a fee when they actually attended.
+            'walk_in_fee_sen' => ($isWalkIn && ! $isAbsent) ? ($row['fee_sen'] ?? null) : null,
+            'note' => filled($row['note'] ?? null) ? $row['note'] : null,
+            'marked_by' => Auth::id(),
+            // The credit pool this consumes: own enrolment (enrolled), a live-credit pool
+            // (make-up) or none (walk-in). A pool already resolved on a prior save is kept.
+            'enrollment_id' => $isWalkIn ? null : ($attendance->enrollment_id ?? $this->resolveEnrollmentId($studentId, $row['type'])),
+        ]);
+
+        $attendance->save();
+
+        return $attendance;
+    }
+
+    /**
+     * The enrolment whose session credit an attendance consumes: the student's enrolment in
+     * this timeslot (enrolled), their oldest live-credit pool (make-up), or none (walk-in).
+     */
+    protected function resolveEnrollmentId(int $studentId, string $type): ?int
+    {
+        if ($type === ParticipantType::Enrolled->value) {
+            return Enrollment::query()
+                ->where('offering_id', $this->offeringId)
+                ->where('student_id', $studentId)
+                ->value('id');
+        }
+
+        if ($type === ParticipantType::MakeUp->value) {
+            return Student::find($studentId)?->liveCreditEnrollment()?->id;
+        }
+
+        return null;
     }
 
     /**

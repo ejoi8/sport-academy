@@ -52,4 +52,20 @@ class Student extends Model
     {
         return $this->dob?->age;
     }
+
+    /**
+     * The oldest enrolment that still has an unexpired session credit to spend — the pool a
+     * make-up would draw from. Null means no live credits, so the student is a paying walk-in.
+     */
+    public function liveCreditEnrollment(): ?Enrollment
+    {
+        return $this->enrollments()
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->where(fn ($query) => $query->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
+            ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
+            ->with('offering.program')
+            ->orderBy('created_at')
+            ->get()
+            ->first(fn (Enrollment $enrollment): bool => $enrollment->creditsRemaining() > 0);
+    }
 }

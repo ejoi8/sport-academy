@@ -295,9 +295,18 @@ class DemoSeeder extends Seeder
             || ($ei % 8 === 0 && $sessionIndex === 3);
         $status = $absent ? 'absent' : (($ei % 6 === 0 && $sessionIndex === 1) ? 'late' : 'present');
 
+        // Link the attendance to the credit pool it consumes: the student's enrolment in
+        // this offering (enrolled), any enrolment they hold (make-up), or none (walk-in).
+        $enrollmentId = match ($type) {
+            'enrolled' => Enrollment::where('offering_id', $session->offering_id)->where('student_id', $student->id)->value('id'),
+            'make_up' => $student->enrollments()->value('id'),
+            default => null,
+        };
+
         $attendance = Attendance::create([
             'training_session_id' => $session->id,
             'student_id' => $student->id,
+            'enrollment_id' => $enrollmentId,
             'participant_type' => $type,
             'status' => $status,
             'coach_id' => $this->coachForIndex($ei),

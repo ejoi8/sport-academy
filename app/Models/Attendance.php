@@ -13,6 +13,7 @@ class Attendance extends Model
     protected $fillable = [
         'training_session_id',
         'student_id',
+        'enrollment_id',
         'participant_type',
         'status',
         'coach_id',
@@ -33,6 +34,11 @@ class Attendance extends Model
     public function trainingSession(): BelongsTo
     {
         return $this->belongsTo(TrainingSession::class);
+    }
+
+    public function enrollment(): BelongsTo
+    {
+        return $this->belongsTo(Enrollment::class);
     }
 
     public function student(): BelongsTo

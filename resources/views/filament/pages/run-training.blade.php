@@ -34,11 +34,17 @@
         .rt-name { font-weight:600; flex:1; display:flex; flex-direction:column; gap:.1rem; min-width:0; }
         .rt-sub { font-size:.7rem; color:var(--rt-muted); font-weight:400; }
         .rt-badge { font-size:.68rem; padding:.15rem .5rem; border-radius:999px; font-weight:700; white-space:nowrap; }
-        .rt-badge.paid { background:var(--rt-accent-soft); color:var(--rt-accent); }
-        .rt-badge.unpaid { background:#fef3c7; color:var(--rt-warn); }
+        .rt-badge.pay-active { background:var(--rt-accent-soft); color:var(--rt-accent); }
+        .rt-badge.pay-pending { background:#fef3c7; color:var(--rt-warn); }
+        .rt-badge.pay-overdue { background:#fee2e2; color:#b91c1c; }
+        .rt-badge.credits { background:var(--rt-soft); color:var(--rt-muted); border:1px solid var(--rt-border); }
+        .rt-badge.credits.over { background:#fee2e2; color:#b91c1c; border-color:transparent; }
         .rt-badge.extra { background:#e0e7ff; color:#4338ca; }
-        .dark .rt-badge.unpaid { background:#422006; }
-        .dark .rt-badge.extra { background:#312e81; color:#c7d2fe; }
+        .rt-badge.walkin { background:#e0e7ff; color:#4338ca; }
+        .dark .rt-badge.pay-pending { background:#422006; }
+        .dark .rt-badge.pay-overdue { background:#450a0a; color:#fecaca; }
+        .dark .rt-badge.credits.over { background:#450a0a; color:#fecaca; }
+        .dark .rt-badge.extra, .dark .rt-badge.walkin { background:#312e81; color:#c7d2fe; }
         .rt-rowmeta { font-size:.73rem; color:var(--rt-muted); white-space:nowrap; }
         .rt-remove { border:0; background:transparent; color:var(--rt-muted); cursor:pointer; font-size:1rem; line-height:1; padding:.25rem; }
         .rt-card { padding:1rem; border-top:1px dashed var(--rt-border); background:var(--rt-soft); display:flex; flex-direction:column; gap:1rem; }
