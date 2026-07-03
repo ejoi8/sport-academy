@@ -105,6 +105,7 @@ class DemoSeeder extends Seeder
         $this->walkIn = $this->makeStudent(null, 'WK Zara (walk-in)');
 
         $this->generateHistory($historyMonth, $historyPeriod);
+        $this->generateCurrentToDate($currentMonth, $currentPeriod);
     }
 
     private function createCoaches(): void
@@ -284,6 +285,50 @@ class DemoSeeder extends Seeder
                 }
                 if ($code === 'group-sat' && $sessionIndex === 2 && $this->makeUp) {
                     $this->recordAttendance($session, $this->makeUp, $sessionIndex, 70, 'make_up');
+                }
+            }
+        }
+    }
+
+    /**
+     * Record the current month's sessions that have already happened (weekday dates up to today),
+     * leaving upcoming dates empty. So a coach opening a current timeslot sees recorded past
+     * sessions and the "Start session" empty state side by side.
+     */
+    private function generateCurrentToDate(Carbon $currentMonth, string $currentPeriod): void
+    {
+        $today = today();
+
+        foreach ($this->slots as $code => $cfg) {
+            $offering = $this->offerings["$currentPeriod|$code"] ?? null;
+            if (! $offering) {
+                continue;
+            }
+
+            $enrolled = Enrollment::query()
+                ->where('offering_id', $offering->id)
+                ->whereIn('status', ['active', 'pending', 'overdue'])
+                ->with('student')
+                ->get();
+
+            if ($enrolled->isEmpty()) {
+                continue;
+            }
+
+            foreach ($this->weekdayDates($currentMonth, $cfg['weekday']) as $sessionIndex => $date) {
+                if ($date->gt($today)) {
+                    continue; // leave upcoming dates empty so the "Start session" state shows
+                }
+
+                $session = TrainingSession::create([
+                    'offering_id' => $offering->id,
+                    'session_date' => $date->toDateString(),
+                    'coach_id' => $this->coaches[$cfg['coach']]->id,
+                    'created_by' => $this->coaches['Farid']->id,
+                ]);
+
+                foreach ($enrolled->values() as $ei => $enrollment) {
+                    $this->recordAttendance($session, $enrollment->student, $sessionIndex, $ei, 'enrolled');
                 }
             }
         }
