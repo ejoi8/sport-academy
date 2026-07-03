@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Student extends Model
 {
@@ -67,5 +68,50 @@ class Student extends Model
             ->orderBy('created_at')
             ->get()
             ->first(fn (Enrollment $enrollment): bool => $enrollment->creditsRemaining() > 0);
+    }
+
+    /**
+     * Per-skill assessment summary — times scored, average, and latest score — in rubric order.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function assessmentSummary(): Collection
+    {
+        return AssessmentScore::query()
+            ->whereHas('attendance', fn ($query) => $query->where('student_id', $this->id))
+            ->with(['skill.category', 'attendance.trainingSession'])
+            ->get()
+            ->groupBy('skill_id')
+            ->map(function (Collection $scores): array {
+                $skill = $scores->first()->skill;
+                $latest = $scores
+                    ->sortByDesc(fn (AssessmentScore $score) => $score->attendance?->trainingSession?->session_date)
+                    ->first();
+
+                return [
+                    'skill' => $skill?->name ?? '—',
+                    'category' => $skill?->category?->name ?? '—',
+                    'sort' => $skill?->sort_order ?? 0,
+                    'count' => $scores->count(),
+                    'average' => round((float) $scores->avg('score'), 1),
+                    'latest' => $latest?->score,
+                ];
+            })
+            ->sortBy('sort')
+            ->values();
+    }
+
+    /**
+     * This student's attendance tally by status.
+     *
+     * @return array<string, int>
+     */
+    public function attendanceCounts(): array
+    {
+        return $this->attendances()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->all();
     }
 }

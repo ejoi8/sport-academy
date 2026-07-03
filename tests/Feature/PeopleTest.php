@@ -5,6 +5,7 @@ use App\Filament\Resources\Enrollments\Pages\ListEnrollments;
 use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Students\Pages\EditStudent;
 use App\Filament\Resources\Students\Pages\ListStudents;
+use App\Filament\Resources\Students\RelationManagers\AttendancesRelationManager;
 use App\Filament\Resources\Students\RelationManagers\EnrollmentsRelationManager;
 use App\Models\Attendance;
 use App\Models\Enrollment;
@@ -167,4 +168,17 @@ it('filters enrolments by the number of sessions attended', function () {
         ->filterTable('attended', ['operator' => 'gte', 'count' => 2])
         ->assertCanSeeTableRecords([$eTwo])
         ->assertCanNotSeeTableRecords([$eNone]);
+});
+
+it('lists a student\'s attended sessions in a read-only relation manager', function () {
+    $student = Student::create(['name' => 'History Kid', 'is_active' => true]);
+    $enrolment = Enrollment::create(['student_id' => $student->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    consumeCredits($enrolment, 2);
+
+    Livewire::test(AttendancesRelationManager::class, [
+        'ownerRecord' => $student,
+        'pageClass' => EditStudent::class,
+    ])
+        ->assertOk()
+        ->assertCountTableRecords(2);
 });

@@ -4,11 +4,13 @@ namespace App\Filament\Resources\Students\Tables;
 
 use App\Enums\Gender;
 use App\Models\Student;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -56,6 +58,11 @@ class StudentsTable
                 TrashedFilter::make(),
             ])
             ->recordActions([
+                Action::make('report')
+                    ->label('Report')
+                    ->icon(Heroicon::OutlinedDocumentArrowDown)
+                    ->url(fn (Student $record): string => route('students.report', $record))
+                    ->openUrlInNewTab(),
                 EditAction::make(),
             ])
             ->toolbarActions([
