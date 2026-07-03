@@ -84,21 +84,6 @@ class DemoSeeder extends Seeder
             $this->offerings["$currentPeriod|$code"] = $this->makeOffering($programs, $cfg, $currentPeriod);
         }
 
-        // One-off Striker Clinic (July, upcoming date).
-        $this->offerings["$currentPeriod|striker"] = Offering::create([
-            'program_id' => $programs['Striker Clinic']->id,
-            'period' => $currentPeriod,
-            'schedule_type' => 'one_off',
-            'specific_date' => $currentMonth->copy()->addDays(16)->toDateString(),
-            'start_time' => '10:00',
-            'end_time' => '12:00',
-            'capacity' => 20,
-            'session_count' => 1,
-            'price_sen' => 9000,
-            'default_coach_id' => $this->coaches['Lena']->id,
-            'is_open' => true,
-        ]);
-
         $this->createFamilies($currentPeriod, $historyPeriod);
 
         // A walk-in (no parent) used in one June session.
@@ -133,7 +118,6 @@ class DemoSeeder extends Seeder
             '1-on-1' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 28000, 'walk_in_fee_sen' => 8000, 'default_sessions' => 4]),
             'Group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group Training', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]),
             'Goalkeeper' => Program::create(['sport_id' => $sport->id, 'name' => 'Goalkeeper', 'base_price_sen' => 15000, 'walk_in_fee_sen' => 5000, 'default_sessions' => 4]),
-            'Striker Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Striker Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]),
         ];
     }
 
@@ -187,7 +171,7 @@ class DemoSeeder extends Seeder
                 ['name' => 'Kira', 'slots' => ['1on1-sun'], 'history' => true, 'julyStatus' => 'overdue', 'allAbsent' => true],
             ]],
             ['code' => 'S8', 'surname' => 'Chan', 'children' => [
-                ['name' => 'Leo', 'slots' => ['striker'], 'history' => false],
+                ['name' => 'Leo', 'slots' => ['gk-thu'], 'history' => false],
             ]],
             ['code' => 'S9', 'surname' => 'Ng', 'children' => [
                 ['name' => 'Omar', 'slots' => ['group-sat'], 'history' => true],
@@ -223,9 +207,7 @@ class DemoSeeder extends Seeder
                 }
 
                 foreach ($child['slots'] as $code) {
-                    $oneOff = $code === 'striker';
-                    $julyKey = $oneOff ? "$currentPeriod|striker" : "$currentPeriod|$code";
-                    $julyOffering = $this->offerings[$julyKey];
+                    $julyOffering = $this->offerings["$currentPeriod|$code"];
 
                     Enrollment::firstOrCreate(
                         ['student_id' => $student->id, 'offering_id' => $julyOffering->id],
@@ -236,7 +218,7 @@ class DemoSeeder extends Seeder
                         ],
                     );
 
-                    if (! empty($child['history']) && ! $oneOff && isset($this->offerings["$historyPeriod|$code"])) {
+                    if (! empty($child['history']) && isset($this->offerings["$historyPeriod|$code"])) {
                         $juneOffering = $this->offerings["$historyPeriod|$code"];
                         Enrollment::firstOrCreate(
                             ['student_id' => $student->id, 'offering_id' => $juneOffering->id],
@@ -452,6 +434,6 @@ class DemoSeeder extends Seeder
 
     private function slotLabel(string $code): string
     {
-        return $code === 'striker' ? 'Striker' : ($this->slots[$code]['label'] ?? $code);
+        return $this->slots[$code]['label'] ?? $code;
     }
 }

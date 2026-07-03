@@ -27,7 +27,7 @@ it('seeds demo data sharing the same rubric, with history and scores', function 
 
     // The rubric is shared, not duplicated: still 7 skills, not 14.
     expect(Skill::query()->count())->toBe(7)
-        ->and(Program::count())->toBe(4)
+        ->and(Program::count())->toBe(3)
         ->and(TrainingSession::count())->toBeGreaterThan(0)
         ->and(AssessmentScore::count())->toBeGreaterThan(0);
 });
