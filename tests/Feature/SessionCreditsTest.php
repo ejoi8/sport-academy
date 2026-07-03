@@ -105,7 +105,8 @@ it('consumes a credit and links the attendance to the enrolment when a session i
     $enrolment = $offering->enrollments()->where('status', 'active')->firstOrFail();
 
     Livewire::test(RunTraining::class)
-        ->set('offeringId', $offering->id) // snaps the date and loads the enrolled roster (all present)
+        ->set('offeringId', $offering->id)
+        ->call('startSession') // load the enrolled roster (all present), then record it
         ->call('save');
 
     $enrolment->refresh();

@@ -59,6 +59,10 @@ class RunTraining extends Page
 
     public bool $savedSessionExists = false;
 
+    // Whether a session is open for the current date (loaded / being recorded). False shows the
+    // "Start session" prompt, because nothing has been recorded for this date yet.
+    public bool $started = false;
+
     // Add-participant panel state.
     public bool $adding = false;
 
@@ -216,6 +220,7 @@ class RunTraining extends Page
         $this->roster = [];
         $this->dirty = false;
         $this->savedSessionExists = false;
+        $this->started = false;
 
         if (! $this->offeringId) {
             $this->headCoachId = null;
@@ -229,7 +234,47 @@ class RunTraining extends Page
         $this->headCoachId = $offering?->default_coach_id;
         $this->bulkCoachId = $this->headCoachId;
 
-        // 1. Enrolled roster for this timeslot, with each enrolment's saved credit usage.
+        $session = TrainingSession::query()
+            ->where('offering_id', $this->offeringId)
+            ->where('session_date', $this->date)
+            ->with(['attendances.student', 'attendances.scores'])
+            ->first();
+
+        // Nothing recorded for this date yet — leave the roster empty so the page shows the
+        // "Start session" prompt instead of a phantom roster.
+        if (! $session) {
+            return;
+        }
+
+        $this->savedSessionExists = true;
+        $this->started = true;
+
+        $this->loadEnrolledRoster();
+        $this->hydrateFromSession($session);
+    }
+
+    /**
+     * Open a fresh session for the current timeslot + date by pulling in the enrolled roster so
+     * the coach can record it. A saved session is auto-opened by loadRoster() instead.
+     */
+    public function startSession(): void
+    {
+        if (! $this->offeringId || blank($this->date) || $this->started) {
+            return;
+        }
+
+        $this->roster = [];
+        $this->started = true;
+
+        $this->loadEnrolledRoster();
+    }
+
+    /**
+     * Pre-fill the roster with this timeslot's enrolled subscribers (present by default), each
+     * carrying its enrolment's saved credit usage.
+     */
+    protected function loadEnrolledRoster(): void
+    {
         Enrollment::query()
             ->where('offering_id', $this->offeringId)
             ->whereIn('status', ['active', 'pending', 'overdue'])
@@ -252,20 +297,13 @@ class RunTraining extends Page
                     ],
                 );
             });
+    }
 
-        // 2. Hydrate from a previously saved session for this offering + date.
-        $session = TrainingSession::query()
-            ->where('offering_id', $this->offeringId)
-            ->where('session_date', $this->date)
-            ->with(['attendances.student', 'attendances.scores'])
-            ->first();
-
-        if (! $session) {
-            return;
-        }
-
-        $this->savedSessionExists = true;
-
+    /**
+     * Overlay a saved session's attendance, coach, notes and scores onto the roster.
+     */
+    protected function hydrateFromSession(TrainingSession $session): void
+    {
         foreach ($session->attendances as $attendance) {
             $key = 's'.$attendance->student_id;
 
