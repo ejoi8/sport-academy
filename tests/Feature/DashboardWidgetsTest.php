@@ -61,8 +61,8 @@ it('queries and renders every table widget', function () {
 
     Livewire::test(FollowUpWidget::class)
         ->assertOk()
-        ->assertCanSeeTableRecords(
-            Enrollment::whereIn('status', [EnrollmentStatus::Overdue, EnrollmentStatus::Pending])->get()
+        ->assertCountTableRecords(
+            Enrollment::whereIn('status', [EnrollmentStatus::Overdue, EnrollmentStatus::Pending])->count()
         );
 
     Livewire::test(CoachTimeslotsWidget::class)

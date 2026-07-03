@@ -104,6 +104,9 @@ class DemoSeeder extends Seeder
         // A walk-in (no parent) used in one June session.
         $this->walkIn = $this->makeStudent(null, 'WK Zara (walk-in)');
 
+        // A large cohort on the current Wednesday group slot so the roster can be tested at ~60.
+        $this->createLargeCohort($currentPeriod);
+
         $this->generateHistory($historyMonth, $historyPeriod);
         $this->generateCurrentToDate($currentMonth, $currentPeriod);
     }
@@ -334,6 +337,39 @@ class DemoSeeder extends Seeder
         }
     }
 
+    /**
+     * A large cohort enrolled in the current Wednesday group slot so Run Training's roster can be
+     * exercised at scale — ~60 students, with a spread of payment statuses. Its already-passed
+     * dates this month carry the full roster; upcoming dates load it via "Start session".
+     */
+    private function createLargeCohort(string $currentPeriod, string $code = 'group-wed', int $size = 60): void
+    {
+        $current = $this->offerings["$currentPeriod|$code"] ?? null;
+
+        if (! $current) {
+            return;
+        }
+
+        // Make sure the slot can hold the cohort.
+        $current->update(['capacity' => max($current->capacity, $size)]);
+
+        for ($i = 1; $i <= $size; $i++) {
+            $student = $this->makeStudent(null, 'Batch '.str_pad((string) $i, 2, '0', STR_PAD_LEFT).' (Group·Wed)');
+
+            // A spread of payment statuses so the roster's badges vary.
+            $status = match (true) {
+                $i % 10 === 0 => 'overdue',
+                $i % 5 === 0 => 'pending',
+                default => 'active',
+            };
+
+            Enrollment::firstOrCreate(
+                ['student_id' => $student->id, 'offering_id' => $current->id],
+                ['status' => $status, 'price_sen' => $current->price_sen, 'sessions_included' => $current->session_count],
+            );
+        }
+    }
+
     private function recordAttendance(TrainingSession $session, Student $student, int $sessionIndex, int $ei, string $type, ?int $walkInFeeSen = null): void
     {
         $absent = in_array($student->id, $this->allAbsentStudentIds, true)
@@ -363,11 +399,17 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        foreach ($this->skills as $skill) {
-            // Scores climb across the month (session 1 ≈ 2, session 4 ≈ 5).
-            $score = min(5, max(1, 1 + $sessionIndex + (($ei + $skill->id) % 2)));
-            AssessmentScore::create(['attendance_id' => $attendance->id, 'skill_id' => $skill->id, 'score' => $score]);
-        }
+        // Scores climb across the month (session 1 ≈ 2, session 4 ≈ 5). Bulk-inserted for speed.
+        $now = now();
+        AssessmentScore::insert(
+            $this->skills->map(fn (Skill $skill): array => [
+                'attendance_id' => $attendance->id,
+                'skill_id' => $skill->id,
+                'score' => min(5, max(1, 1 + $sessionIndex + (($ei + $skill->id) % 2))),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all(),
+        );
     }
 
     private function makeStudent(?int $parentId, string $name): Student
