@@ -59,10 +59,6 @@ class RunTraining extends Page
 
     public bool $savedSessionExists = false;
 
-    // Whether a session is open for the current date (loaded / being recorded). False shows the
-    // "Start session" prompt, because nothing has been recorded for this date yet.
-    public bool $started = false;
-
     // Add-participant panel state.
     public bool $adding = false;
 
@@ -220,7 +216,6 @@ class RunTraining extends Page
         $this->roster = [];
         $this->dirty = false;
         $this->savedSessionExists = false;
-        $this->started = false;
 
         if (! $this->offeringId) {
             $this->headCoachId = null;
@@ -234,39 +229,21 @@ class RunTraining extends Page
         $this->headCoachId = $offering?->default_coach_id;
         $this->bulkCoachId = $this->headCoachId;
 
+        // Always show the timeslot's enrolled prospects (present by default) so the coach sees who
+        // is expected for the session. These rows are in memory only — nothing is stored until Save.
+        $this->loadEnrolledRoster();
+
+        // If this date was already recorded, overlay the saved attendance, coach, notes and scores.
         $session = TrainingSession::query()
             ->where('offering_id', $this->offeringId)
             ->where('session_date', $this->date)
             ->with(['attendances.student', 'attendances.scores'])
             ->first();
 
-        // Nothing recorded for this date yet — leave the roster empty so the page shows the
-        // "Start session" prompt instead of a phantom roster.
-        if (! $session) {
-            return;
+        if ($session) {
+            $this->savedSessionExists = true;
+            $this->hydrateFromSession($session);
         }
-
-        $this->savedSessionExists = true;
-        $this->started = true;
-
-        $this->loadEnrolledRoster();
-        $this->hydrateFromSession($session);
-    }
-
-    /**
-     * Open a fresh session for the current timeslot + date by pulling in the enrolled roster so
-     * the coach can record it. A saved session is auto-opened by loadRoster() instead.
-     */
-    public function startSession(): void
-    {
-        if (! $this->offeringId || blank($this->date) || $this->started) {
-            return;
-        }
-
-        $this->roster = [];
-        $this->started = true;
-
-        $this->loadEnrolledRoster();
     }
 
     /**

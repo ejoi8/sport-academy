@@ -47,7 +47,6 @@ it('records attendance and rubric scores for the enrolled roster', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->assertSet('roster.'.$key.'.type', 'enrolled')
         ->call('setStatus', $key, 'present')
         ->call('setScore', $key, $skill->id, 4)
@@ -62,16 +61,17 @@ it('records attendance and rubric scores for the enrolled roster', function () {
     $this->assertDatabaseHas('assessment_scores', ['skill_id' => $skill->id, 'score' => 4]);
 });
 
-it('shows an empty roster until the session is started', function () {
+it('auto-loads the enrolled prospects (in memory only) when a timeslot is opened', function () {
     [, $offering, , $key] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->assertSet('started', false)
-        ->assertCount('roster', 0)          // no phantom roster on a date with no session
-        ->call('startSession')
-        ->assertSet('started', true)
-        ->assertSet('roster.'.$key.'.type', 'enrolled'); // now the enrolled roster loads
+        ->assertSet('roster.'.$key.'.type', 'enrolled')  // prospects show immediately
+        ->assertSet('savedSessionExists', false);         // but nothing is recorded yet
+
+    // Just viewing the roster writes nothing to the database.
+    expect(TrainingSession::count())->toBe(0)
+        ->and(Attendance::count())->toBe(0);
 });
 
 it('tapping the selected score pill again clears it, and saving deletes the stored score', function () {
@@ -79,7 +79,6 @@ it('tapping the selected score pill again clears it, and saving deletes the stor
 
     $component = Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('setScore', $key, $skill->id, 3)
         ->call('save');
 
@@ -97,7 +96,6 @@ it('does not record a fee or scores for a walk-in marked absent', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('startAdd')
         ->set('newName', 'No Show')
         ->call('addNewWalkIn') // first new walk-in => key 'n1'
@@ -122,7 +120,6 @@ it('re-saving does not duplicate a newly created walk-in student', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('startAdd')
         ->set('newName', 'Twice Saver')
         ->call('addNewWalkIn')
@@ -138,7 +135,6 @@ it('hydrates a previously saved session when the same timeslot and date is re-op
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('setStatus', $key, 'late')
         ->call('setScore', $key, $skill->id, 2)
         ->call('save');
@@ -156,7 +152,6 @@ it('deletes a saved session and cascades its attendance and scores', function ()
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('setScore', $key, $skill->id, 4)
         ->call('save')
         ->assertSet('savedSessionExists', true)
@@ -173,7 +168,6 @@ it('removing a saved participant and re-saving deletes their attendance', functi
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->call('setScore', $key, $skill->id, 3)
         ->call('save');
 
@@ -198,7 +192,6 @@ it('defaults each student to the head coach and persists a per-student coach cha
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->assertSet('headCoachId', $coach->id)
         ->assertSet('roster.'.$key.'.coach_id', $coach->id) // defaulted to the timeslot head coach
         ->set('roster.'.$key.'.coach_id', $other->id)       // reassign just this student
@@ -218,7 +211,6 @@ it('bulk-assigns every player to one coach', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->set('bulkCoachId', $other->id)
         ->call('assignAll')
         ->assertSet('roster.'.$key.'.coach_id', $other->id)
@@ -267,7 +259,6 @@ it('persists and re-hydrates a per-student note', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id)
-        ->call('startSession')
         ->set('roster.'.$key.'.note', 'Great movement today')
         ->call('save');
 
@@ -297,7 +288,6 @@ it('does not create a session when the roster is empty', function () {
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $empty->id)
-        ->call('startSession')
         ->assertCount('roster', 0)
         ->call('save');
 

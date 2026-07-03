@@ -80,7 +80,6 @@
         .rt-warn { width:100%; font-size:.78rem; color:var(--rt-warn); background:#fffbeb; border:1px solid #fde68a; border-radius:.5rem; padding:.4rem .6rem; }
         .dark .rt-warn { background:#2a1e05; border-color:#78550c; }
         .rt-callout { border:1px dashed var(--rt-border); border-radius:.75rem; padding:1.25rem; text-align:center; color:var(--rt-muted); font-size:.85rem; }
-        .rt-empty { display:flex; flex-direction:column; align-items:center; gap:1rem; padding:2.5rem 1rem; }
         .rt-savebar { position:sticky; bottom:0; display:flex; justify-content:flex-end; gap:.75rem; padding:.75rem 0; background:linear-gradient(to top, var(--rt-bg) 55%, transparent); }
         .rt-save { background:var(--rt-accent); color:#fff; border:0; border-radius:.6rem; padding:.65rem 1.6rem; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,0,0,.18); }
         .rt-save:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
@@ -115,18 +114,13 @@
                     <span class="rt-dirty">● Unsaved changes</span>
                 @elseif($savedSessionExists)
                     <span class="rt-saved">● Saved</span>
+                @else
+                    <span class="rt-muted">● Not recorded yet</span>
                 @endif
             </div>
         </div>
 
-        @if(! $offeringId)
-            <div class="rt-callout">Choose a timeslot above to load its roster.</div>
-        @elseif(! $started)
-            <div class="rt-callout rt-empty">
-                <div>No session recorded for <strong>{{ $date ? \Illuminate\Support\Carbon::parse($date)->format('l, j M Y') : 'this date' }}</strong> yet.</div>
-                <button type="button" class="rt-save" wire:click="startSession">Start session</button>
-            </div>
-        @else
+        @if($offeringId)
             <div class="rt-coachbar">
                 <span>Assign all to</span>
                 <select wire:model="bulkCoachId">
@@ -227,6 +221,8 @@
                 @endif
                 <button type="button" class="rt-save" wire:click="save">Save session</button>
             </div>
+        @else
+            <div class="rt-callout">Choose a timeslot above to load its roster.</div>
         @endif
     </div>
 </x-filament::page>
