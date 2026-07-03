@@ -7,6 +7,12 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Project docs
+
+- [Domain model & core concepts](docs/domain-model.md) — how programs, offerings, enrolments,
+  session credits, and on-demand training sessions fit together (read before touching Run
+  Training or enrolments).
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
