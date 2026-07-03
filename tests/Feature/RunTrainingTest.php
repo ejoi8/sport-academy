@@ -13,6 +13,7 @@ use App\Models\User;
 use Database\Seeders\BaselineSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -22,7 +23,7 @@ beforeEach(function () {
 });
 
 /**
- * @return array{0: User, 1: Offering, 2: Skill, 3: string}
+ * @return array{0: User, 1: Offering, 2: Skill, 3: string, 4: string}
  */
 function runTrainingContext(): array
 {
@@ -33,19 +34,27 @@ function runTrainingContext(): array
     $skill = Skill::query()->orderBy('sort_order')->firstOrFail();
     $student = $offering->enrollments()->with('student')->first()->student;
 
+    // A date the offering actually runs — its first weekday occurrence that month. Setting this
+    // date makes the page auto-select this timeslot (date-first flow).
+    $date = Carbon::parse($offering->period.'-01')->startOfMonth();
+    while ($date->dayOfWeekIso !== $offering->weekday) {
+        $date->addDay();
+    }
+
     test()->actingAs($coach);
 
-    return [$coach, $offering, $skill, 's'.$student->id];
+    return [$coach, $offering, $skill, 's'.$student->id, $date->toDateString()];
 }
 
 it('records attendance and rubric scores for the enrolled roster', function () {
-    [$coach, $offering, $skill, $key] = runTrainingContext();
+    [$coach, $offering, $skill, $key, $date] = runTrainingContext();
 
     $enrolledCount = Enrollment::where('offering_id', $offering->id)
         ->whereIn('status', ['active', 'pending', 'overdue'])
         ->count();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->assertSet('roster.'.$key.'.type', 'enrolled')
         ->call('setStatus', $key, 'present')
@@ -62,9 +71,10 @@ it('records attendance and rubric scores for the enrolled roster', function () {
 });
 
 it('auto-loads the enrolled prospects (in memory only) when a timeslot is opened', function () {
-    [, $offering, , $key] = runTrainingContext();
+    [, $offering, , $key, $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->assertSet('roster.'.$key.'.type', 'enrolled')  // prospects show immediately
         ->assertSet('savedSessionExists', false);         // but nothing is recorded yet
@@ -75,9 +85,10 @@ it('auto-loads the enrolled prospects (in memory only) when a timeslot is opened
 });
 
 it('tapping the selected score pill again clears it, and saving deletes the stored score', function () {
-    [, $offering, $skill, $key] = runTrainingContext();
+    [, $offering, $skill, $key, $date] = runTrainingContext();
 
     $component = Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('setScore', $key, $skill->id, 3)
         ->call('save');
@@ -92,9 +103,10 @@ it('tapping the selected score pill again clears it, and saving deletes the stor
 });
 
 it('does not record a fee or scores for a walk-in marked absent', function () {
-    [, $offering, $skill] = runTrainingContext();
+    [, $offering, $skill, , $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('startAdd')
         ->set('newName', 'No Show')
@@ -114,11 +126,12 @@ it('does not record a fee or scores for a walk-in marked absent', function () {
 });
 
 it('re-saving does not duplicate a newly created walk-in student', function () {
-    [, $offering] = runTrainingContext();
+    [, $offering, , , $date] = runTrainingContext();
 
     $before = Student::count();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('startAdd')
         ->set('newName', 'Twice Saver')
@@ -131,26 +144,29 @@ it('re-saving does not duplicate a newly created walk-in student', function () {
 });
 
 it('hydrates a previously saved session when the same timeslot and date is re-opened', function () {
-    [, $offering, $skill, $key] = runTrainingContext();
+    [, $offering, $skill, $key, $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('setStatus', $key, 'late')
         ->call('setScore', $key, $skill->id, 2)
         ->call('save');
 
-    // A fresh page load (mount defaults to this offering + today) must reflect the saved state.
+    // Re-opening the same date + timeslot must reflect the saved state.
     Livewire::test(RunTraining::class)
-        ->assertSet('offeringId', $offering->id)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
         ->assertSet('savedSessionExists', true)
         ->assertSet('roster.'.$key.'.status', 'late')
         ->assertSet('roster.'.$key.'.scores.'.$skill->id, 2);
 });
 
 it('deletes a saved session and cascades its attendance and scores', function () {
-    [, $offering, $skill, $key] = runTrainingContext();
+    [, $offering, $skill, $key, $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('setScore', $key, $skill->id, 4)
         ->call('save')
@@ -164,9 +180,10 @@ it('deletes a saved session and cascades its attendance and scores', function ()
 });
 
 it('removing a saved participant and re-saving deletes their attendance', function () {
-    [, $offering, $skill, $key] = runTrainingContext();
+    [, $offering, $skill, $key, $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('setScore', $key, $skill->id, 3)
         ->call('save');
@@ -176,6 +193,8 @@ it('removing a saved participant and re-saving deletes their attendance', functi
 
     // Re-open (hydrated), remove one participant, save again.
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
         ->assertSet('roster.'.$key.'.scores.'.$skill->id, 3)
         ->call('removeRow', $key)
         ->call('save');
@@ -185,12 +204,13 @@ it('removing a saved participant and re-saving deletes their attendance', functi
 });
 
 it('defaults each student to the head coach and persists a per-student coach change', function () {
-    [$coach, $offering, , $key] = runTrainingContext();
+    [$coach, $offering, , $key, $date] = runTrainingContext();
 
     $other = User::factory()->create(['name' => 'Coach Two']);
     $studentId = (int) substr($key, 1);
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->assertSet('headCoachId', $coach->id)
         ->assertSet('roster.'.$key.'.coach_id', $coach->id) // defaulted to the timeslot head coach
@@ -204,12 +224,13 @@ it('defaults each student to the head coach and persists a per-student coach cha
 });
 
 it('bulk-assigns every player to one coach', function () {
-    [, $offering, , $key] = runTrainingContext();
+    [, $offering, , $key, $date] = runTrainingContext();
 
     $other = User::factory()->create(['name' => 'Coach Bulk']);
     $studentId = (int) substr($key, 1);
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->set('bulkCoachId', $other->id)
         ->call('assignAll')
@@ -220,9 +241,10 @@ it('bulk-assigns every player to one coach', function () {
 });
 
 it('adds a coach on the fly who becomes assignable', function () {
-    [, $offering] = runTrainingContext();
+    [, $offering, , , $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->call('startAddCoach')
         ->set('newCoachName', 'Coach Fresh')
@@ -232,32 +254,190 @@ it('adds a coach on the fly who becomes assignable', function () {
     $this->assertDatabaseHas('users', ['name' => 'Coach Fresh']);
 });
 
-it('scopes the timeslot dropdown to the selected month and switches with it', function () {
-    [, $julyOffering] = runTrainingContext();
+it('runs a new session on an off-schedule date by choosing a program and time', function () {
+    [, $offering] = runTrainingContext();
+    $program = Program::firstOrFail();
 
-    $juneOffering = Offering::create([
-        'program_id' => $julyOffering->program_id,
-        'period' => now()->subMonthNoOverflow()->format('Y-m'),
-        'schedule_type' => 'recurring',
-        'weekday' => 3,
-        'start_time' => '18:00',
-        'end_time' => '19:30',
-        'capacity' => 10,
-        'price_sen' => 12000,
-        'is_open' => true,
-    ]);
+    // A Thursday has no scheduled timeslot (BaselineSeeder has Wed + Sat only).
+    $thursday = Carbon::parse($offering->period.'-01')->startOfMonth();
+    while ($thursday->dayOfWeekIso !== 4) {
+        $thursday->addDay();
+    }
 
     Livewire::test(RunTraining::class)
-        ->assertSet('period', now()->format('Y-m'))
-        ->assertSet('offeringId', $julyOffering->id)     // defaults to a current-month timeslot
-        ->set('period', $juneOffering->period)
-        ->assertSet('offeringId', $juneOffering->id);    // switching month re-scopes the timeslot
+        ->set('date', $thursday->toDateString())
+        ->assertSet('offeringId', null)          // off-schedule -> nothing auto-selected
+        ->set('timeslot', 'new')                 // choose "＋ Create new session"
+        ->assertSet('creatingSession', true)
+        ->set('adHocProgramId', $program->id)    // name the program + time
+        ->set('adHocTime', '18:00')
+        ->call('startAdd')
+        ->set('newName', 'Ad Hoc Kid')
+        ->call('addNewWalkIn')
+        ->call('save')
+        ->assertSet('creatingSession', false);
+
+    // The one-off timeslot is written only on Save, together with its session.
+    $adHoc = Offering::where('schedule_type', 'one_off')
+        ->whereDate('specific_date', $thursday->toDateString())
+        ->firstOrFail();
+
+    expect($adHoc->program_id)->toBe($program->id);
+    $this->assertDatabaseHas('training_sessions', [
+        'offering_id' => $adHoc->id,
+        'session_date' => $thursday->toDateString(),
+    ]);
+});
+
+it('can add a new session on a date that already has a timeslot', function () {
+    [, $offering, , , $date] = runTrainingContext(); // group runs on this date
+    $program = Program::firstOrFail();
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->assertSet('offeringId', $offering->id)  // the scheduled timeslot auto-selects...
+        ->set('timeslot', 'new')                  // ...yet a fresh session is still reachable
+        ->assertSet('creatingSession', true)
+        ->set('adHocProgramId', $program->id)
+        ->set('adHocTime', '20:00')
+        ->call('startAdd')
+        ->set('newName', 'Extra Kid')
+        ->call('addNewWalkIn')
+        ->call('save');
+
+    // A second, one-off timeslot now exists on that date alongside the recurring one.
+    expect(Offering::whereDate('specific_date', $date)->where('schedule_type', 'one_off')->count())->toBe(1);
+});
+
+it('warns about an overlapping timeslot but still allows the new session', function () {
+    [, $offering, , , $date] = runTrainingContext(); // the group runs on this date + time
+    $program = Program::firstOrFail();
+    $time = substr((string) $offering->start_time, 0, 5);
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('timeslot', 'new')
+        ->set('adHocProgramId', $program->id)
+        ->set('adHocTime', $time);
+
+    // The existing timeslot at that time is surfaced as a soft overlap warning...
+    expect($component->instance()->overlappingTimeslots)->not->toBeEmpty();
+
+    // ...but recording is still permitted — it may be a deliberate second team.
+    $component->call('startAdd')
+        ->set('newName', 'Team B Kid')
+        ->call('addNewWalkIn')
+        ->call('save')
+        ->assertSet('creatingSession', false);
+
+    expect(Offering::whereDate('specific_date', $date)->where('schedule_type', 'one_off')->count())->toBe(1);
+});
+
+it('flags a partial time-range overlap, not just an identical start time', function () {
+    [, $offering, , , $date] = runTrainingContext(); // group runs 18:00–19:30 on this date
+    $program = Program::firstOrFail();
+
+    // A start time inside the existing range but different from its start — the old same-start-only
+    // check would have missed this; the range check should catch it.
+    $inside = Carbon::parse($offering->start_time)->addMinutes(30)->format('H:i');
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('timeslot', 'new')
+        ->set('adHocProgramId', $program->id)
+        ->set('adHocTime', $inside);
+
+    expect($component->instance()->overlappingTimeslots)->not->toBeEmpty();
+
+    // A slot that starts after the existing one ends is not a conflict.
+    $component->set('adHocTime', Carbon::parse($offering->end_time)->addMinutes(30)->format('H:i'));
+    expect($component->instance()->overlappingTimeslots)->toBeEmpty();
+});
+
+it('writes nothing when a staged new session is abandoned', function () {
+    runTrainingContext();
+    $program = Program::firstOrFail();
+    $before = Offering::count();
+
+    Livewire::test(RunTraining::class)
+        ->set('timeslot', 'new')
+        ->set('adHocProgramId', $program->id)
+        ->set('adHocTime', '18:00');
+    // never saved
+
+    expect(Offering::count())->toBe($before);
+});
+
+it('removes the one-off timeslot when its ad-hoc session is deleted', function () {
+    [, $offering] = runTrainingContext();
+    $program = Program::firstOrFail();
+
+    $thursday = Carbon::parse($offering->period.'-01')->startOfMonth();
+    while ($thursday->dayOfWeekIso !== 4) {
+        $thursday->addDay();
+    }
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $thursday->toDateString())
+        ->set('timeslot', 'new')
+        ->set('adHocProgramId', $program->id)
+        ->set('adHocTime', '18:00')
+        ->call('startAdd')
+        ->set('newName', 'Ad Hoc Kid')
+        ->call('addNewWalkIn')
+        ->call('save');
+
+    $adHocId = Offering::where('schedule_type', 'one_off')
+        ->whereDate('specific_date', $thursday->toDateString())
+        ->value('id');
+    expect($adHocId)->not->toBeNull();
+
+    $component->call('deleteSession');
+
+    // The session and its one-off timeslot are both gone — no orphan is left behind.
+    expect(Offering::find($adHocId))->toBeNull();
+    $this->assertDatabaseMissing('training_sessions', ['offering_id' => $adHocId]);
+});
+
+it('re-prices walk-ins added before the program was chosen', function () {
+    runTrainingContext();
+    $program = Program::where('walk_in_fee_sen', '>', 0)->firstOrFail();
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('timeslot', 'new')             // walk-in fee starts at 0 (no program yet)
+        ->call('startAdd')
+        ->set('newName', 'Early Bird')
+        ->call('addNewWalkIn');
+
+    expect($component->get('roster')['n1']['fee_sen'])->toBe(0);
+
+    $component->set('adHocProgramId', $program->id);   // choosing the program re-prices
+
+    expect($component->get('roster')['n1']['fee_sen'])->toBe($program->walk_in_fee_sen);
+});
+
+it('picks the timeslot from the selected date (date-first)', function () {
+    [, $wedOffering, , , $wedDate] = runTrainingContext(); // group, on a Wednesday
+
+    // BaselineSeeder also has a Saturday 1-on-1 timeslot.
+    $satOffering = Offering::where('is_open', true)->where('weekday', 6)->firstOrFail();
+    $satDate = Carbon::parse($satOffering->period.'-01')->startOfMonth();
+    while ($satDate->dayOfWeekIso !== 6) {
+        $satDate->addDay();
+    }
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $wedDate)
+        ->assertSet('offeringId', $wedOffering->id)      // Wednesday -> the Wednesday timeslot
+        ->set('date', $satDate->toDateString())
+        ->assertSet('offeringId', $satOffering->id);     // Saturday -> the Saturday timeslot
 });
 
 it('persists and re-hydrates a per-student note', function () {
-    [, $offering, , $key] = runTrainingContext();
+    [, $offering, , $key, $date] = runTrainingContext();
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
         ->set('offeringId', $offering->id)
         ->set('roster.'.$key.'.note', 'Great movement today')
         ->call('save');
@@ -268,6 +448,8 @@ it('persists and re-hydrates a per-student note', function () {
     ]);
 
     Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
         ->assertSet('roster.'.$key.'.note', 'Great movement today');
 });
 

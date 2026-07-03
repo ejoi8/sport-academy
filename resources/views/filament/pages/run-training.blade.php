@@ -80,6 +80,8 @@
         .rt-warn { width:100%; font-size:.78rem; color:var(--rt-warn); background:#fffbeb; border:1px solid #fde68a; border-radius:.5rem; padding:.4rem .6rem; }
         .dark .rt-warn { background:#2a1e05; border-color:#78550c; }
         .rt-callout { border:1px dashed var(--rt-border); border-radius:.75rem; padding:1.25rem; text-align:center; color:var(--rt-muted); font-size:.85rem; }
+        .rt-newsession { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.6rem .75rem; border:1px solid var(--rt-border); border-radius:.6rem; background:var(--rt-soft); font-size:.82rem; margin-bottom:.5rem; }
+        .rt-newsession-label { font-weight:600; }
         .rt-savebar { position:sticky; bottom:0; display:flex; justify-content:flex-end; gap:.75rem; padding:.75rem 0; background:linear-gradient(to top, var(--rt-bg) 55%, transparent); }
         .rt-save { background:var(--rt-accent); color:#fff; border:0; border-radius:.6rem; padding:.65rem 1.6rem; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,0,0,.18); }
         .rt-save:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
@@ -89,24 +91,26 @@
     <div class="rt">
         <div class="rt-head">
             <div class="rt-controls">
-                <select wire:model.live="period" title="Month" @disabled($dirty)>
-                    @foreach($this->periodOptions as $p => $label)
-                        <option value="{{ $p }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="offeringId" title="Timeslot" @disabled($dirty)>
+                @php($navLocked = $dirty || $creatingSession)
+                <div class="rt-datenav">
+                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(-1)" @disabled($navLocked)>‹</button>
+                    <input type="date" wire:model.live="date" @disabled($navLocked)>
+                    <span class="rt-weekday">{{ $date ? \Illuminate\Support\Carbon::parse($date)->format('D') : '' }}</span>
+                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(1)" @disabled($navLocked)>›</button>
+                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($navLocked)>Today</button>
+                </div>
+                <select wire:model.live="timeslot" title="Timeslot" @disabled($dirty)>
                     <option value="">— choose timeslot —</option>
                     @foreach($this->offeringOptions as $id => $label)
                         <option value="{{ $id }}">{{ $label }}</option>
                     @endforeach
+                    <option value="new">＋ Create new session</option>
                 </select>
-                <div class="rt-datenav">
-                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(-1)" @disabled($dirty)>‹</button>
-                    <input type="date" wire:model.live="date" @disabled($dirty)>
-                    <span class="rt-weekday">{{ $date ? \Illuminate\Support\Carbon::parse($date)->format('D') : '' }}</span>
-                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(1)" @disabled($dirty)>›</button>
-                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($dirty)>Today</button>
-                </div>
+                <select wire:model.live="period" title="Month" @disabled($navLocked)>
+                    @foreach($this->periodOptions as $p => $label)
+                        <option value="{{ $p }}">{{ $label }}</option>
+                    @endforeach
+                </select>
             </div>
             <div class="rt-summary">
                 <span>{{ $this->summary() }}</span>
@@ -120,7 +124,29 @@
             </div>
         </div>
 
-        @if($offeringId)
+        @if($offeringId || $creatingSession)
+            @if($creatingSession)
+                <div class="rt-newsession">
+                    <span class="rt-newsession-label">New session</span>
+                    <select wire:model.live="adHocProgramId" title="Program">
+                        <option value="">— program —</option>
+                        @foreach($this->programOptions as $id => $name)
+                            <option value="{{ $id }}">{{ $name }}</option>
+                        @endforeach
+                    </select>
+                    <input type="time" wire:model.live="adHocTime" title="Start time">
+                    <span class="rt-muted">to</span>
+                    <input type="time" wire:model="adHocEndTime" title="End time (optional)">
+                    <button type="button" class="rt-btn ghost" wire:click="cancelNewSession">Cancel</button>
+                    <span class="rt-muted">Add the players who attended below, then Save.</span>
+                    @error('adHocProgramId') <div class="rt-warn">{{ $message }}</div> @enderror
+                    @error('adHocTime') <div class="rt-warn">{{ $message }}</div> @enderror
+                    @if($this->overlappingTimeslots)
+                        <div class="rt-warn" style="flex-basis:100%;">⚠ A session already runs at {{ substr($adHocTime, 0, 5) }} on this date — {{ implode(', ', $this->overlappingTimeslots) }}. Only create a separate session if that's intended (e.g. a second team).</div>
+                    @endif
+                </div>
+            @endif
+
             <div class="rt-coachbar">
                 <span>Assign all to</span>
                 <select wire:model="bulkCoachId">
@@ -155,7 +181,7 @@
                 @forelse($enrolled as $key => $row)
                     @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'skills' => $skills, 'coachOptions' => $coachOptions, 'removable' => false])
                 @empty
-                    <div class="rt-muted">No players enrolled for this timeslot yet.</div>
+                    <div class="rt-muted">{{ $creatingSession ? 'New session — add the players who attended below.' : 'No players enrolled for this timeslot yet.' }}</div>
                 @endforelse
             </div>
 
@@ -219,10 +245,14 @@
                     <button type="button" class="rt-btn ghost" wire:click="discard"
                         wire:confirm="Discard your unsaved changes?">Discard</button>
                 @endif
-                <button type="button" class="rt-save" wire:click="save">Save session</button>
+                <button type="button" class="rt-save"
+                    @if($creatingSession && $this->overlappingTimeslots && count($roster))
+                        wire:confirm="A session already runs at that time on this date ({{ implode(', ', $this->overlappingTimeslots) }}). Create a second, separate session anyway?"
+                    @endif
+                    wire:click="save">Save session</button>
             </div>
         @else
-            <div class="rt-callout">Choose a timeslot above to load its roster.</div>
+            <div class="rt-callout">Choose a timeslot above, or <strong>＋ Create new session</strong>, to record.</div>
         @endif
     </div>
 </x-filament::page>
