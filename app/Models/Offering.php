@@ -65,7 +65,9 @@ class Offering extends Model
     public function scheduleLabel(): string
     {
         if ($this->schedule_type === ScheduleType::OneOff) {
-            return $this->specific_date?->format('D, j M') ?? 'One-off';
+            $label = $this->specific_date?->format('D, j M') ?? 'One-off';
+
+            return $this->start_time ? trim($label.' '.substr((string) $this->start_time, 0, 5)) : $label;
         }
 
         $days = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'];

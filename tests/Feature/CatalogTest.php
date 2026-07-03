@@ -83,6 +83,33 @@ it('creates a recurring timeslot offering', function () {
     ]);
 });
 
+it('creates a one-off clinic offering with a start and end time', function () {
+    $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
+    $program = Program::create(['sport_id' => $sport->id, 'name' => 'Football Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]);
+
+    Livewire::test(CreateOffering::class)
+        ->fillForm([
+            'program_id' => $program->id,
+            'period' => now()->format('Y-m'),
+            'schedule_type' => 'one_off',
+            'specific_date' => now()->startOfMonth()->addDays(10)->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'capacity' => 20,
+            'session_count' => 1,
+            'price_sen' => '90.00',
+            'is_open' => true,
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $offering = Offering::where('program_id', $program->id)->where('schedule_type', 'one_off')->firstOrFail();
+
+    expect($offering->specific_date->toDateString())->toBe(now()->startOfMonth()->addDays(10)->toDateString())
+        ->and(substr((string) $offering->start_time, 0, 5))->toBe('09:00')
+        ->and(substr((string) $offering->end_time, 0, 5))->toBe('12:00');
+});
+
 it('renders the timeslots list', function () {
     Livewire::test(ListOfferings::class)->assertOk();
 });

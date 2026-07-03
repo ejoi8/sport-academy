@@ -48,7 +48,7 @@ class OfferingForm
                     ->live()
                     ->native(false),
 
-                // Recurring weekly timeslot.
+                // Recurring weekly timeslot: which weekday.
                 Select::make('weekday')
                     ->label('Day of week')
                     ->options([
@@ -58,19 +58,19 @@ class OfferingForm
                     ->native(false)
                     ->visible(fn (Get $get): bool => self::isRecurring($get))
                     ->required(fn (Get $get): bool => self::isRecurring($get)),
-                TimePicker::make('start_time')
-                    ->seconds(false)
-                    ->visible(fn (Get $get): bool => self::isRecurring($get))
-                    ->required(fn (Get $get): bool => self::isRecurring($get)),
-                TimePicker::make('end_time')
-                    ->seconds(false)
-                    ->visible(fn (Get $get): bool => self::isRecurring($get)),
 
-                // One-off clinic.
+                // One-off clinic: which date.
                 DatePicker::make('specific_date')
                     ->native(false)
                     ->visible(fn (Get $get): bool => ! self::isRecurring($get))
                     ->required(fn (Get $get): bool => ! self::isRecurring($get)),
+
+                // Both schedule types carry a start/end time.
+                TimePicker::make('start_time')
+                    ->seconds(false)
+                    ->required(),
+                TimePicker::make('end_time')
+                    ->seconds(false),
 
                 TextInput::make('capacity')
                     ->numeric()
