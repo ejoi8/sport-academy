@@ -6,10 +6,13 @@ use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Students\Pages\EditStudent;
 use App\Filament\Resources\Students\Pages\ListStudents;
 use App\Filament\Resources\Students\RelationManagers\EnrollmentsRelationManager;
+use App\Models\Attendance;
+use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
 use App\Models\Sport;
 use App\Models\Student;
+use App\Models\TrainingSession;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -113,4 +116,55 @@ it('enrols a student through their own relation manager', function () {
         'offering_id' => $offering->id,
         'status' => 'active',
     ]);
+});
+
+/** Consume `count` credits on an enrolment via present attendances on its own sessions. */
+function consumeCredits(Enrollment $enrolment, int $count): void
+{
+    for ($i = 0; $i < $count; $i++) {
+        $session = TrainingSession::create([
+            'offering_id' => $enrolment->offering_id,
+            'session_date' => now()->startOfMonth()->addDays($i * 7)->toDateString(),
+        ]);
+
+        Attendance::create([
+            'training_session_id' => $session->id,
+            'student_id' => $enrolment->student_id,
+            'enrollment_id' => $enrolment->id,
+            'participant_type' => 'enrolled',
+            'status' => 'present',
+        ]);
+    }
+}
+
+it('filters enrolments to those with credits remaining', function () {
+    $done = Student::create(['name' => 'All done', 'is_active' => true]);
+    $left = Student::create(['name' => 'Has credits', 'is_active' => true]);
+
+    $eDone = Enrollment::create(['student_id' => $done->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    $eLeft = Enrollment::create(['student_id' => $left->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+
+    consumeCredits($eDone, 4); // 4 / 4 — finished
+    consumeCredits($eLeft, 1); // 1 / 4 — still has credits
+
+    Livewire::test(ListEnrollments::class)
+        ->filterTable('unfinished')
+        ->assertCanSeeTableRecords([$eLeft])
+        ->assertCanNotSeeTableRecords([$eDone]);
+});
+
+it('filters enrolments by the number of sessions attended', function () {
+    $two = Student::create(['name' => 'Attended two', 'is_active' => true]);
+    $none = Student::create(['name' => 'Attended none', 'is_active' => true]);
+
+    $eTwo = Enrollment::create(['student_id' => $two->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    $eNone = Enrollment::create(['student_id' => $none->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+
+    consumeCredits($eTwo, 2); // two present attendances
+    // $eNone: never turned up
+
+    Livewire::test(ListEnrollments::class)
+        ->filterTable('attended', ['operator' => 'gte', 'count' => 2])
+        ->assertCanSeeTableRecords([$eTwo])
+        ->assertCanNotSeeTableRecords([$eNone]);
 });
