@@ -38,6 +38,7 @@ it('creates a program, storing the RM prices as sen', function () {
             'name' => 'Group Training',
             'base_price_sen' => '120.00',
             'walk_in_fee_sen' => '40.00',
+            'default_sessions' => 6,
             'is_active' => true,
         ])
         ->call('create')
@@ -47,6 +48,7 @@ it('creates a program, storing the RM prices as sen', function () {
         'name' => 'Group Training',
         'base_price_sen' => 12000,
         'walk_in_fee_sen' => 4000,
+        'default_sessions' => 6,
     ]);
 });
 
@@ -63,6 +65,7 @@ it('creates a recurring timeslot offering', function () {
             'start_time' => '18:00',
             'end_time' => '19:30',
             'capacity' => 12,
+            'session_count' => 5,
             'price_sen' => '120.00',
             'is_open' => true,
         ])
@@ -74,6 +77,7 @@ it('creates a recurring timeslot offering', function () {
         'period' => now()->format('Y-m'),
         'weekday' => 3,
         'capacity' => 12,
+        'session_count' => 5,
         'price_sen' => 12000,
         'is_open' => true,
     ]);
@@ -122,6 +126,7 @@ it('enrols a student through the offering relation manager', function () {
         'start_time' => '18:00',
         'end_time' => '19:30',
         'capacity' => 12,
+        'session_count' => 5,
         'price_sen' => 12000,
         'is_open' => true,
     ]);
@@ -132,11 +137,11 @@ it('enrols a student through the offering relation manager', function () {
         'pageClass' => EditOffering::class,
     ])
         ->assertOk()
+        // sessions_included is left out so it snapshots from the offering's session_count.
         ->callAction(TestAction::make('create')->table(), [
             'student_id' => $student->id,
             'status' => 'active',
             'price_sen' => '120.00',
-            'sessions_included' => 4,
         ]);
 
     $this->assertDatabaseHas('enrollments', [
@@ -144,5 +149,6 @@ it('enrols a student through the offering relation manager', function () {
         'student_id' => $student->id,
         'status' => 'active',
         'price_sen' => 12000,
+        'sessions_included' => 5,
     ]);
 });

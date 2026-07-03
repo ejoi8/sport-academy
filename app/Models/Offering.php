@@ -18,6 +18,7 @@ class Offering extends Model
         'end_time',
         'specific_date',
         'capacity',
+        'session_count',
         'price_sen',
         'default_coach_id',
         'is_open',
@@ -30,6 +31,7 @@ class Offering extends Model
             'weekday' => 'integer',
             'specific_date' => 'date',
             'capacity' => 'integer',
+            'session_count' => 'integer',
             'price_sen' => 'integer',
             'is_open' => 'boolean',
         ];

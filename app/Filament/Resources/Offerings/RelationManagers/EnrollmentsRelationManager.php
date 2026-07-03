@@ -46,9 +46,10 @@ class EnrollmentsRelationManager extends RelationManager
                     ->dehydrateStateUsing(fn (?string $state): int => (int) round(((float) $state) * 100)),
                 TextInput::make('sessions_included')
                     ->label('Sessions')
+                    ->helperText('Snapshotted from the timeslot; adjust for a pro-rated enrolment.')
                     ->numeric()
                     ->minValue(0)
-                    ->default(4)
+                    ->default(fn (): int => $this->getOwnerRecord()->session_count ?? 4)
                     ->required(),
             ]);
     }

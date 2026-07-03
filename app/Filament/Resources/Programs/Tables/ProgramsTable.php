@@ -27,6 +27,10 @@ class ProgramsTable
                 TextColumn::make('walk_in_fee_sen')
                     ->label('Walk-in')
                     ->money('MYR', divideBy: 100),
+                TextColumn::make('default_sessions')
+                    ->label('Sessions')
+                    ->badge()
+                    ->color('gray'),
                 TextColumn::make('offerings_count')
                     ->counts('offerings')
                     ->label('Timeslots')

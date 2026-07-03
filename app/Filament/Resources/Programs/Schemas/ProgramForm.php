@@ -31,6 +31,13 @@ class ProgramForm
                     ->columnSpanFull(),
                 self::moneyField('base_price_sen', 'Monthly price (RM)'),
                 self::moneyField('walk_in_fee_sen', 'Walk-in fee (RM)'),
+                TextInput::make('default_sessions')
+                    ->label('Sessions per month')
+                    ->helperText('The standard number of sessions a monthly enrolment includes.')
+                    ->numeric()
+                    ->minValue(1)
+                    ->default(4)
+                    ->required(),
                 Toggle::make('is_active')
                     ->default(true),
             ])));

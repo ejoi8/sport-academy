@@ -14,6 +14,7 @@ class Program extends Model
         'description',
         'base_price_sen',
         'walk_in_fee_sen',
+        'default_sessions',
         'is_active',
     ];
 
@@ -22,6 +23,7 @@ class Program extends Model
         return [
             'base_price_sen' => 'integer',
             'walk_in_fee_sen' => 'integer',
+            'default_sessions' => 'integer',
             'is_active' => 'boolean',
         ];
     }

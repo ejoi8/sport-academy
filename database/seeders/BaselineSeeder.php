@@ -45,6 +45,7 @@ class BaselineSeeder extends Seeder
             'name' => 'Group Training',
             'base_price_sen' => 12000,
             'walk_in_fee_sen' => 4000,
+            'default_sessions' => 4,
         ]);
 
         $oneToOne = Program::create([
@@ -52,6 +53,7 @@ class BaselineSeeder extends Seeder
             'name' => 'One-to-One',
             'base_price_sen' => 28000,
             'walk_in_fee_sen' => 8000,
+            'default_sessions' => 4,
         ]);
 
         $period = now()->format('Y-m');
@@ -64,6 +66,7 @@ class BaselineSeeder extends Seeder
             'start_time' => '18:00',
             'end_time' => '19:30',
             'capacity' => 12,
+            'session_count' => 4,
             'price_sen' => 12000,
             'default_coach_id' => $coach->id,
             'is_open' => true,
@@ -77,6 +80,7 @@ class BaselineSeeder extends Seeder
             'start_time' => '10:00',
             'end_time' => '11:00',
             'capacity' => 3,
+            'session_count' => 4,
             'price_sen' => 28000,
             'default_coach_id' => $coach->id,
             'is_open' => true,
@@ -100,7 +104,7 @@ class BaselineSeeder extends Seeder
                     'offering_id' => $groupOffering->id,
                     'status' => $index < 4 ? 'active' : 'pending',
                     'price_sen' => 12000,
-                    'sessions_included' => 4,
+                    'sessions_included' => $groupOffering->session_count,
                 ]);
             }
         }

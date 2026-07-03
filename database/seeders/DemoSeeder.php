@@ -93,6 +93,7 @@ class DemoSeeder extends Seeder
             'start_time' => '10:00',
             'end_time' => '12:00',
             'capacity' => 20,
+            'session_count' => 1,
             'price_sen' => 9000,
             'default_coach_id' => $this->coaches['Lena']->id,
             'is_open' => true,
@@ -125,10 +126,10 @@ class DemoSeeder extends Seeder
     private function createPrograms(Sport $sport): array
     {
         return [
-            '1-on-1' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 28000, 'walk_in_fee_sen' => 8000]),
-            'Group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group Training', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000]),
-            'Goalkeeper' => Program::create(['sport_id' => $sport->id, 'name' => 'Goalkeeper', 'base_price_sen' => 15000, 'walk_in_fee_sen' => 5000]),
-            'Striker Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Striker Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000]),
+            '1-on-1' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 28000, 'walk_in_fee_sen' => 8000, 'default_sessions' => 4]),
+            'Group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group Training', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]),
+            'Goalkeeper' => Program::create(['sport_id' => $sport->id, 'name' => 'Goalkeeper', 'base_price_sen' => 15000, 'walk_in_fee_sen' => 5000, 'default_sessions' => 4]),
+            'Striker Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Striker Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]),
         ];
     }
 
@@ -146,6 +147,7 @@ class DemoSeeder extends Seeder
             'start_time' => $cfg['start'],
             'end_time' => $cfg['end'],
             'capacity' => $cfg['cap'],
+            'session_count' => $programs[$cfg['program']]->default_sessions,
             'price_sen' => $cfg['price'],
             'default_coach_id' => $this->coaches[$cfg['coach']]->id,
             'is_open' => true,
@@ -226,7 +228,7 @@ class DemoSeeder extends Seeder
                         [
                             'status' => $child['julyStatus'] ?? 'active',
                             'price_sen' => $julyOffering->price_sen,
-                            'sessions_included' => $oneOff ? 1 : 4,
+                            'sessions_included' => $julyOffering->session_count,
                         ],
                     );
 
@@ -234,7 +236,7 @@ class DemoSeeder extends Seeder
                         $juneOffering = $this->offerings["$historyPeriod|$code"];
                         Enrollment::firstOrCreate(
                             ['student_id' => $student->id, 'offering_id' => $juneOffering->id],
-                            ['status' => 'active', 'price_sen' => $juneOffering->price_sen, 'sessions_included' => 4],
+                            ['status' => 'active', 'price_sen' => $juneOffering->price_sen, 'sessions_included' => $juneOffering->session_count],
                         );
                     }
                 }

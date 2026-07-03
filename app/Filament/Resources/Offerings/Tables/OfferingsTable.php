@@ -44,6 +44,10 @@ class OfferingsTable
                 TextColumn::make('capacity')
                     ->badge()
                     ->color('gray'),
+                TextColumn::make('session_count')
+                    ->label('Sessions')
+                    ->badge()
+                    ->color('gray'),
                 TextColumn::make('price_sen')
                     ->label('Price')
                     ->money('MYR', divideBy: 100),
