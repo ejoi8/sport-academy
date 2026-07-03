@@ -4,6 +4,9 @@ namespace App\Filament\Resources\Students\RelationManagers;
 
 use App\Enums\AttendanceStatus;
 use App\Models\Attendance;
+use Filament\Actions\ViewAction;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -31,7 +34,7 @@ class AttendancesRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('id')
             ->defaultSort('training_session_id', 'desc')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['trainingSession.offering.program', 'coach']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['trainingSession.offering.program', 'coach', 'scores.skill']))
             ->columns([
                 TextColumn::make('trainingSession.session_date')
                     ->label('Date')
@@ -56,6 +59,37 @@ class AttendancesRelationManager extends RelationManager
             ->filters([
                 SelectFilter::make('status')
                     ->options(AttendanceStatus::class),
+            ])
+            ->recordActions([
+                ViewAction::make()
+                    ->infolist([
+                        TextEntry::make('trainingSession.session_date')
+                            ->label('Date')
+                            ->date(),
+                        TextEntry::make('timeslot')
+                            ->state(fn (Attendance $record): string => $record->trainingSession?->offering?->label() ?? '—'),
+                        TextEntry::make('status')
+                            ->badge(),
+                        TextEntry::make('participant_type')
+                            ->label('Type')
+                            ->badge(),
+                        TextEntry::make('coach.name')
+                            ->label('Coach')
+                            ->placeholder('—'),
+                        TextEntry::make('note')
+                            ->placeholder('—')
+                            ->columnSpanFull(),
+                        RepeatableEntry::make('scores')
+                            ->label('Assessment')
+                            ->schema([
+                                TextEntry::make('skill.name')
+                                    ->label('Skill'),
+                                TextEntry::make('score')
+                                    ->badge(),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 }

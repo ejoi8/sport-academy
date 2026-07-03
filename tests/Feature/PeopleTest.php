@@ -7,10 +7,13 @@ use App\Filament\Resources\Students\Pages\EditStudent;
 use App\Filament\Resources\Students\Pages\ListStudents;
 use App\Filament\Resources\Students\RelationManagers\AttendancesRelationManager;
 use App\Filament\Resources\Students\RelationManagers\EnrollmentsRelationManager;
+use App\Models\AssessmentScore;
 use App\Models\Attendance;
 use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
+use App\Models\Skill;
+use App\Models\SkillCategory;
 use App\Models\Sport;
 use App\Models\Student;
 use App\Models\TrainingSession;
@@ -181,4 +184,30 @@ it('lists a student\'s attended sessions in a read-only relation manager', funct
     ])
         ->assertOk()
         ->assertCountTableRecords(2);
+});
+
+it('shows a session\'s assessment scores in the read-only view', function () {
+    $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
+    $category = SkillCategory::create(['sport_id' => $sport->id, 'name' => 'Technical', 'sort_order' => 1]);
+    $skill = Skill::create(['sport_id' => $sport->id, 'skill_category_id' => $category->id, 'name' => 'Passing', 'sort_order' => 1]);
+
+    $student = Student::create(['name' => 'Scored Kid', 'is_active' => true]);
+    $session = TrainingSession::create(['offering_id' => anOffering()->id, 'session_date' => now()->toDateString()]);
+    $attendance = Attendance::create([
+        'training_session_id' => $session->id,
+        'student_id' => $student->id,
+        'participant_type' => 'enrolled',
+        'status' => 'present',
+    ]);
+    AssessmentScore::create(['attendance_id' => $attendance->id, 'skill_id' => $skill->id, 'score' => 4]);
+
+    Livewire::test(AttendancesRelationManager::class, [
+        'ownerRecord' => $student,
+        'pageClass' => EditStudent::class,
+    ])
+        ->mountAction(TestAction::make('view')->table($attendance))
+        ->assertSuccessful();
+
+    // The view's infolist reads the session's scores through this relation.
+    expect($attendance->scores()->with('skill')->first()?->skill?->name)->toBe('Passing');
 });
