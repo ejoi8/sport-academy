@@ -34,8 +34,8 @@ function runTrainingContext(): array
     $skill = Skill::query()->orderBy('sort_order')->firstOrFail();
     $student = $offering->enrollments()->with('student')->first()->student;
 
-    // A date the offering actually runs — its first weekday occurrence that month. Setting this
-    // date makes the page auto-select this timeslot (date-first flow).
+    // A date the offering actually runs — its first weekday occurrence that month, so it shows up
+    // in that day's session list.
     $date = Carbon::parse($offering->period.'-01')->startOfMonth();
     while ($date->dayOfWeekIso !== $offering->weekday) {
         $date->addDay();
@@ -267,7 +267,7 @@ it('runs a new session on an off-schedule date by choosing a program and time', 
     Livewire::test(RunTraining::class)
         ->set('date', $thursday->toDateString())
         ->assertSet('offeringId', null)          // off-schedule -> nothing auto-selected
-        ->set('timeslot', 'new')                 // choose "＋ Create new session"
+        ->call('toggleNewSession')                 // choose "＋ Create new session"
         ->assertSet('creatingSession', true)
         ->set('adHocProgramId', $program->id)    // name the program + time
         ->set('adHocTime', '18:00')
@@ -295,8 +295,9 @@ it('can add a new session on a date that already has a timeslot', function () {
 
     Livewire::test(RunTraining::class)
         ->set('date', $date)
-        ->assertSet('offeringId', $offering->id)  // the scheduled timeslot auto-selects...
-        ->set('timeslot', 'new')                  // ...yet a fresh session is still reachable
+        ->call('toggleSession', $offering->id)  // a class is already selected...
+        ->assertSet('offeringId', $offering->id)
+        ->call('toggleNewSession')                   // ...yet a fresh session is still reachable
         ->assertSet('creatingSession', true)
         ->set('adHocProgramId', $program->id)
         ->set('adHocTime', '20:00')
@@ -316,7 +317,7 @@ it('warns about an overlapping timeslot but still allows the new session', funct
 
     $component = Livewire::test(RunTraining::class)
         ->set('date', $date)
-        ->set('timeslot', 'new')
+        ->call('toggleNewSession')
         ->set('adHocProgramId', $program->id)
         ->set('adHocTime', $time);
 
@@ -343,7 +344,7 @@ it('flags a partial time-range overlap, not just an identical start time', funct
 
     $component = Livewire::test(RunTraining::class)
         ->set('date', $date)
-        ->set('timeslot', 'new')
+        ->call('toggleNewSession')
         ->set('adHocProgramId', $program->id)
         ->set('adHocTime', $inside);
 
@@ -360,7 +361,7 @@ it('writes nothing when a staged new session is abandoned', function () {
     $before = Offering::count();
 
     Livewire::test(RunTraining::class)
-        ->set('timeslot', 'new')
+        ->call('toggleNewSession')
         ->set('adHocProgramId', $program->id)
         ->set('adHocTime', '18:00');
     // never saved
@@ -379,7 +380,7 @@ it('removes the one-off timeslot when its ad-hoc session is deleted', function (
 
     $component = Livewire::test(RunTraining::class)
         ->set('date', $thursday->toDateString())
-        ->set('timeslot', 'new')
+        ->call('toggleNewSession')
         ->set('adHocProgramId', $program->id)
         ->set('adHocTime', '18:00')
         ->call('startAdd')
@@ -404,7 +405,7 @@ it('re-prices walk-ins added before the program was chosen', function () {
     $program = Program::where('walk_in_fee_sen', '>', 0)->firstOrFail();
 
     $component = Livewire::test(RunTraining::class)
-        ->set('timeslot', 'new')             // walk-in fee starts at 0 (no program yet)
+        ->call('toggleNewSession')             // walk-in fee starts at 0 (no program yet)
         ->call('startAdd')
         ->set('newName', 'Early Bird')
         ->call('addNewWalkIn');
@@ -416,21 +417,23 @@ it('re-prices walk-ins added before the program was chosen', function () {
     expect($component->get('roster')['n1']['fee_sen'])->toBe($program->walk_in_fee_sen);
 });
 
-it('picks the timeslot from the selected date (date-first)', function () {
-    [, $wedOffering, , , $wedDate] = runTrainingContext(); // group, on a Wednesday
+it('lists the sessions on a date and expands one to record', function () {
+    [, $offering, , $key, $date] = runTrainingContext(); // group runs on this date
 
-    // BaselineSeeder also has a Saturday 1-on-1 timeslot.
-    $satOffering = Offering::where('is_open', true)->where('weekday', 6)->firstOrFail();
-    $satDate = Carbon::parse($satOffering->period.'-01')->startOfMonth();
-    while ($satDate->dayOfWeekIso !== 6) {
-        $satDate->addDay();
-    }
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $date);
 
-    Livewire::test(RunTraining::class)
-        ->set('date', $wedDate)
-        ->assertSet('offeringId', $wedOffering->id)      // Wednesday -> the Wednesday timeslot
-        ->set('date', $satDate->toDateString())
-        ->assertSet('offeringId', $satOffering->id);     // Saturday -> the Saturday timeslot
+    // The day's sessions are listed as cards...
+    expect(collect($component->instance()->sessionsOnDate)->pluck('id'))->toContain($offering->id);
+
+    // ...expanding one loads its enrolled roster...
+    $component->call('toggleSession', $offering->id)
+        ->assertSet('offeringId', $offering->id)
+        ->assertSet('roster.'.$key.'.type', 'enrolled');
+
+    // ...and toggling it again collapses it.
+    $component->call('toggleSession', $offering->id)
+        ->assertSet('offeringId', null);
 });
 
 it('persists and re-hydrates a per-student note', function () {

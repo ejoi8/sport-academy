@@ -42,8 +42,6 @@ class RunTraining extends Page
 
     public string $date = '';
 
-    public string $period = '';
-
     /** @var array<string, array<string, mixed>> */
     public array $roster = [];
 
@@ -81,9 +79,6 @@ class RunTraining extends Page
 
     public string $newCoachEmail = '';
 
-    // Timeslot selector value: an existing offering id, or 'new' to run a session on a fresh one-off.
-    public string $timeslot = '';
-
     // Staging a brand-new session. Its one-off timeslot is created on Save — never before — so an
     // abandoned session leaves nothing behind. These hold the chosen program + time until then.
     public bool $creatingSession = false;
@@ -96,9 +91,7 @@ class RunTraining extends Page
 
     public function mount(): void
     {
-        $this->date = $this->defaultDate();
-        $this->period = Carbon::parse($this->date)->format('Y-m');
-        $this->syncOfferingToDate();
+        $this->date = today()->toDateString();
         $this->loadRoster();
     }
 
@@ -108,42 +101,52 @@ class RunTraining extends Page
             $this->date = today()->toDateString();
         }
 
-        $this->period = Carbon::parse($this->date)->format('Y-m');
-        $this->syncOfferingToDate();
-        $this->loadRoster();
-    }
-
-    public function updatedPeriod(): void
-    {
-        // Jump to the first session date of the chosen month (or its first day if none).
-        $this->date = $this->sessionDates()->first(fn (Carbon $date): bool => $date->format('Y-m') === $this->period)?->toDateString()
-            ?? Carbon::parse($this->period.'-01')->toDateString();
-
-        $this->syncOfferingToDate();
-        $this->loadRoster();
-    }
-
-    public function updatedTimeslot(): void
-    {
-        // The timeslot dropdown drives everything: an id loads that timeslot's roster, 'new' stages
-        // a brand-new session, and blank clears it.
-        if ($this->timeslot === 'new') {
-            $this->startNewSession();
-
-            return;
-        }
-
-        $this->offeringId = $this->timeslot !== '' ? (int) $this->timeslot : null;
+        // Changing the day collapses whatever was open; the accordion re-lists the new day's sessions.
+        $this->offeringId = null;
         $this->creatingSession = false;
+        $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
         $this->loadRoster();
     }
 
     public function updatedOfferingId(): void
     {
-        // Direct offering changes (e.g. tests) keep the dropdown value in step and reload the roster.
-        $this->timeslot = $this->offeringId ? (string) $this->offeringId : '';
+        // Direct offering changes (e.g. tests) expand that session's roster.
         $this->creatingSession = false;
         $this->loadRoster();
+    }
+
+    /**
+     * Expand a session card to record it, or collapse it if it is already open. One open at a time;
+     * unsaved edits must be saved or discarded before switching away.
+     */
+    public function toggleSession(int $offeringId): void
+    {
+        if ($this->dirty) {
+            return;
+        }
+
+        $this->creatingSession = false;
+        $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
+        $this->offeringId = $this->offeringId === $offeringId ? null : $offeringId;
+        $this->loadRoster();
+    }
+
+    /**
+     * Expand (or collapse) the "create new session" card.
+     */
+    public function toggleNewSession(): void
+    {
+        if ($this->dirty) {
+            return;
+        }
+
+        if ($this->creatingSession) {
+            $this->cancelNewSession();
+
+            return;
+        }
+
+        $this->startNewSession();
     }
 
     public function updatedAdHocProgramId(): void
@@ -182,104 +185,20 @@ class RunTraining extends Page
     }
 
     /**
-     * Back out of a staged new session, returning to the selected date's own timeslots.
+     * Back out of a staged new session, clearing the selection so the coach can pick a class.
      */
     public function cancelNewSession(): void
     {
         $this->creatingSession = false;
         $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
-        $this->syncOfferingToDate();
+        $this->offeringId = null;
         $this->loadRoster();
     }
 
     public function goToday(): void
     {
         $this->date = today()->toDateString();
-        $this->period = today()->format('Y-m');
-        $this->syncOfferingToDate();
-        $this->loadRoster();
-    }
-
-    /**
-     * Keep the selected timeslot consistent with the date: if the current one isn't a session on
-     * this date, switch to the first timeslot that is (or none, when the date has no sessions).
-     */
-    protected function syncOfferingToDate(): void
-    {
-        // A date change cancels any half-staged new session.
-        $this->creatingSession = false;
-        $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
-
-        // Auto-select a timeslot only when one genuinely runs on this date. Keep the current one if
-        // it still fits; otherwise pick the first on-date timeslot, or none (the coach can then
-        // choose "＋ Create new session").
-        $onDate = $this->offeringsOnDate($this->date);
-
-        if (! ($this->offeringId && $onDate->contains('id', (int) $this->offeringId))) {
-            $this->offeringId = $onDate->first()?->id;
-        }
-
-        $this->timeslot = $this->offeringId ? (string) $this->offeringId : '';
-    }
-
-    /**
-     * The soonest upcoming session date (from today), else the most recent past one.
-     */
-    protected function defaultDate(): string
-    {
-        $dates = $this->sessionDates();
-
-        if ($dates->isEmpty()) {
-            return today()->toDateString();
-        }
-
-        return ($dates->first(fn (Carbon $date): bool => $date->gte(today())) ?? $dates->last())->toDateString();
-    }
-
-    /**
-     * Every date on which an open timeslot has a session, sorted ascending.
-     *
-     * @return Collection<int, Carbon>
-     */
-    protected function sessionDates(): Collection
-    {
-        return Offering::query()
-            ->where('is_open', true)
-            ->get()
-            ->flatMap(fn (Offering $offering): Collection => $this->occurrenceDates($offering))
-            ->unique(fn (Carbon $date): string => $date->toDateString())
-            ->sort()
-            ->values();
-    }
-
-    /**
-     * The dates a timeslot runs: its weekday occurrences within its month (recurring), or its one date.
-     *
-     * @return Collection<int, Carbon>
-     */
-    protected function occurrenceDates(Offering $offering): Collection
-    {
-        if ($offering->schedule_type === ScheduleType::OneOff) {
-            return $offering->specific_date ? collect([$offering->specific_date->copy()]) : collect();
-        }
-
-        if (! $offering->weekday) {
-            return collect();
-        }
-
-        $monthStart = Carbon::parse($offering->period.'-01')->startOfMonth();
-        $monthEnd = $monthStart->copy()->endOfMonth();
-
-        $dates = collect();
-        $cursor = $monthStart->copy();
-        while ($cursor->lte($monthEnd)) {
-            if ($cursor->dayOfWeekIso === $offering->weekday) {
-                $dates->push($cursor->copy());
-            }
-            $cursor->addDay();
-        }
-
-        return $dates;
+        $this->updatedDate();
     }
 
     /**
@@ -325,26 +244,6 @@ class RunTraining extends Page
     {
         // Fires when a note or per-student coach (wire:model) changes.
         $this->dirty = true;
-    }
-
-    public function shiftDay(int $direction): void
-    {
-        // Step to the previous / next date that actually has a session (across all timeslots).
-        $current = Carbon::parse($this->date);
-        $dates = $this->sessionDates();
-
-        $target = $direction > 0
-            ? $dates->first(fn (Carbon $date): bool => $date->gt($current))
-            : $dates->reverse()->first(fn (Carbon $date): bool => $date->lt($current));
-
-        if (! $target) {
-            return;
-        }
-
-        $this->date = $target->toDateString();
-        $this->period = $target->format('Y-m');
-        $this->syncOfferingToDate();
-        $this->loadRoster();
     }
 
     public function loadRoster(): void
@@ -724,7 +623,7 @@ class RunTraining extends Page
                 ['adHocProgramId' => 'program', 'adHocTime' => 'time'],
             );
         } elseif (! $this->offeringId) {
-            Notification::make()->warning()->title('Pick a timeslot first')->send();
+            Notification::make()->warning()->title('Open a session first')->send();
 
             return;
         }
@@ -747,7 +646,6 @@ class RunTraining extends Page
             if ($this->creatingSession) {
                 $this->offeringId = $this->createAdHocOffering()->id;
                 $this->creatingSession = false;
-                $this->timeslot = (string) $this->offeringId;
             }
 
             $session = TrainingSession::firstOrCreate(
@@ -945,7 +843,7 @@ class RunTraining extends Page
             && $offering->schedule_type === ScheduleType::OneOff
             && ! TrainingSession::where('offering_id', $offeringId)->exists()) {
             $offering->delete();
-            $this->syncOfferingToDate();
+            $this->offeringId = null;
         }
 
         $this->loadRoster();
@@ -981,16 +879,45 @@ class RunTraining extends Page
     }
 
     /**
-     * The timeslots that run on the currently selected date.
+     * The sessions that run on the selected date — one collapsible card each. Carries a light
+     * summary (enrolled count + whether it's already recorded) for the collapsed header.
      *
-     * @return array<int, string>
+     * @return array<int, array{id:int, program:string, time:string, enrolled:int, recorded:bool}>
      */
     #[Computed]
-    public function offeringOptions(): array
+    public function sessionsOnDate(): array
     {
-        return $this->offeringsOnDate($this->date)
-            ->mapWithKeys(fn (Offering $offering): array => [$offering->id => $offering->label()])
+        $offerings = $this->offeringsOnDate($this->date);
+
+        if ($offerings->isEmpty()) {
+            return [];
+        }
+
+        $ids = $offerings->pluck('id');
+
+        $enrolled = Enrollment::query()
+            ->whereIn('offering_id', $ids)
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->selectRaw('offering_id, count(*) as total')
+            ->groupBy('offering_id')
+            ->pluck('total', 'offering_id')
             ->all();
+
+        $recorded = array_flip(
+            TrainingSession::query()
+                ->whereIn('offering_id', $ids)
+                ->where('session_date', $this->date)
+                ->pluck('offering_id')
+                ->all()
+        );
+
+        return $offerings->map(fn (Offering $offering): array => [
+            'id' => $offering->id,
+            'program' => $offering->program?->name ?? 'Session',
+            'time' => substr((string) $offering->start_time, 0, 5),
+            'enrolled' => (int) ($enrolled[$offering->id] ?? 0),
+            'recorded' => isset($recorded[$offering->id]),
+        ])->all();
     }
 
     /**
@@ -1086,21 +1013,6 @@ class RunTraining extends Page
             ->orderBy('program_id')
             ->orderBy('start_time')
             ->get();
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    #[Computed]
-    public function periodOptions(): array
-    {
-        return Offering::query()
-            ->where('is_open', true)
-            ->orderByDesc('period')
-            ->pluck('period')
-            ->unique()
-            ->mapWithKeys(fn (string $period): array => [$period => Carbon::parse($period.'-01')->format('M Y')])
-            ->all();
     }
 
     /**

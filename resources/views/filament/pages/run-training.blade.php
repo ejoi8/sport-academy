@@ -8,17 +8,15 @@
         .dark .rt { --rt-border:#374151; --rt-bg:#1f2937; --rt-soft:#111827; --rt-muted:#9ca3af; --rt-accent:#22c55e; --rt-accent-soft:#064e3b; }
         .rt input, .rt select, .rt textarea { border:1px solid var(--rt-border); border-radius:.5rem; padding:.4rem .6rem; background:var(--rt-bg); color:inherit; font-size:.85rem; }
         .rt select:disabled, .rt input:disabled { opacity:.55; cursor:not-allowed; }
-        .rt-iconbtn:disabled { opacity:.4; cursor:not-allowed; }
         .rt-head { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; justify-content:space-between; }
-        .rt-controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
-        .rt-datenav { display:inline-flex; align-items:center; gap:.25rem; }
+        .rt-controls { display:flex; flex-wrap:wrap; gap:.9rem; align-items:flex-end; }
+        .rt-fieldgroup { display:flex; flex-direction:column; gap:.25rem; }
+        .rt-fieldlabel { font-size:.64rem; text-transform:uppercase; letter-spacing:.08em; color:var(--rt-muted); font-weight:700; }
+        .rt-datenav { display:inline-flex; align-items:center; gap:.4rem; }
         .rt-weekday { font-size:.75rem; color:var(--rt-muted); min-width:1.6rem; text-align:center; }
-        .rt-iconbtn { border:1px solid var(--rt-border); border-radius:.5rem; width:2rem; height:2rem; display:inline-flex; align-items:center; justify-content:center; background:var(--rt-bg); cursor:pointer; color:inherit; }
         .rt-summary { font-size:.8rem; color:var(--rt-muted); display:flex; gap:.5rem; align-items:center; }
         .rt-dirty { color:var(--rt-warn); font-weight:600; }
         .rt-saved { color:var(--rt-accent); font-weight:600; }
-        .rt-coachbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.6rem .75rem; border:1px solid var(--rt-border); border-radius:.6rem; background:var(--rt-soft); font-size:.82rem; }
-        .rt-coachbar .sep { flex:1; }
         .rt-list, .rt-added { display:flex; flex-direction:column; gap:.5rem; }
         .rt-item { border:1px solid var(--rt-border); border-radius:.75rem; background:var(--rt-bg); overflow:hidden; }
         .rt-item.open { border-color:var(--rt-accent); box-shadow:0 0 0 1px var(--rt-accent) inset; }
@@ -80,179 +78,98 @@
         .rt-warn { width:100%; font-size:.78rem; color:var(--rt-warn); background:#fffbeb; border:1px solid #fde68a; border-radius:.5rem; padding:.4rem .6rem; }
         .dark .rt-warn { background:#2a1e05; border-color:#78550c; }
         .rt-callout { border:1px dashed var(--rt-border); border-radius:.75rem; padding:1.25rem; text-align:center; color:var(--rt-muted); font-size:.85rem; }
-        .rt-newsession { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.6rem .75rem; border:1px solid var(--rt-border); border-radius:.6rem; background:var(--rt-soft); font-size:.82rem; margin-bottom:.5rem; }
-        .rt-newsession-label { font-weight:600; }
+        .rt-newsession { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.6rem .75rem; border:1px solid var(--rt-border); border-radius:.6rem; background:var(--rt-bg); font-size:.82rem; }
         .rt-savebar { position:sticky; bottom:0; display:flex; justify-content:flex-end; gap:.75rem; padding:.75rem 0; background:linear-gradient(to top, var(--rt-bg) 55%, transparent); }
         .rt-save { background:var(--rt-accent); color:#fff; border:0; border-radius:.6rem; padding:.65rem 1.6rem; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,0,0,.18); }
         .rt-save:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
         .rt-delete { border:1px solid var(--rt-danger); color:var(--rt-danger); background:transparent; border-radius:.6rem; padding:.65rem 1.2rem; font-weight:600; cursor:pointer; }
+        /* session accordion */
+        .rt-sessions { display:flex; flex-direction:column; gap:.6rem; }
+        .rt-listlabel { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--rt-muted); font-weight:700; }
+        .rt-sc { border:1px solid var(--rt-border); border-radius:12px; background:var(--rt-bg); }
+        .rt-sc.open { border-color:var(--rt-accent); box-shadow:0 0 0 1px var(--rt-accent) inset; }
+        .rt-sc.locked { opacity:.5; pointer-events:none; }
+        .rt-sc-head { display:flex; align-items:center; gap:.7rem; padding:.8rem 1rem; cursor:pointer; }
+        .rt-sc-chev { color:var(--rt-muted); font-size:.8rem; transition:transform .15s; width:.9rem; text-align:center; }
+        .rt-sc.open .rt-sc-chev { transform:rotate(90deg); color:var(--rt-accent); }
+        .rt-sc-title { font-weight:650; }
+        .rt-sc-time { color:var(--rt-muted); font-weight:500; }
+        .rt-sc-spacer { flex:1; }
+        .rt-sc-meta { font-size:.77rem; color:var(--rt-muted); white-space:nowrap; }
+        .rt-status { display:inline-flex; align-items:center; gap:.35rem; font-size:.68rem; font-weight:700; padding:.2rem .55rem; border-radius:999px; white-space:nowrap; }
+        .rt-status .led { width:.42rem; height:.42rem; border-radius:50%; }
+        .rt-status.saved { background:var(--rt-accent-soft); color:var(--rt-accent); }
+        .rt-status.saved .led { background:var(--rt-accent); }
+        .rt-status.pending { background:var(--rt-soft); color:var(--rt-muted); border:1px solid var(--rt-border); }
+        .rt-status.pending .led { background:#cbd5e1; }
+        .rt-sc-body { border-top:1px dashed var(--rt-border); padding:1rem; display:flex; flex-direction:column; gap:.9rem; background:var(--rt-soft); }
+        .rt-sc.new .rt-sc-head { color:var(--rt-accent); font-weight:600; }
+        .rt-sc.new .rt-sc-chev.plus { color:var(--rt-accent); font-weight:800; transform:none; }
+        /* light coach strip */
+        .rt-coachstrip { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; font-size:.8rem; color:var(--rt-muted); }
+        .rt-coachstrip .rt-cs-label { font-weight:600; color:inherit; }
+        .rt-cs-sep { width:1px; height:1.1rem; background:var(--rt-border); }
+        .rt-linkbtn { border:0; background:transparent; color:var(--rt-accent); font-weight:600; font-size:.8rem; cursor:pointer; padding:0; }
+        .rt-linkbtn.muted { color:var(--rt-muted); }
+        .rt-linkbtn:disabled { opacity:.4; cursor:not-allowed; }
     </style>
 
     <div class="rt">
+        @php($sessions = $this->sessionsOnDate)
         <div class="rt-head">
-            <div class="rt-controls">
-                @php($navLocked = $dirty || $creatingSession)
+            <label class="rt-fieldgroup">
+                <span class="rt-fieldlabel">Date</span>
                 <div class="rt-datenav">
-                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(-1)" @disabled($navLocked)>‹</button>
-                    <input type="date" wire:model.live="date" @disabled($navLocked)>
+                    <input type="date" wire:model.live="date" @disabled($dirty)>
                     <span class="rt-weekday">{{ $date ? \Illuminate\Support\Carbon::parse($date)->format('D') : '' }}</span>
-                    <button type="button" class="rt-iconbtn" wire:click="shiftDay(1)" @disabled($navLocked)>›</button>
-                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($navLocked)>Today</button>
+                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($dirty)>Today</button>
                 </div>
-                <select wire:model.live="timeslot" title="Timeslot" @disabled($dirty)>
-                    <option value="">— choose timeslot —</option>
-                    @foreach($this->offeringOptions as $id => $label)
-                        <option value="{{ $id }}">{{ $label }}</option>
-                    @endforeach
-                    <option value="new">＋ Create new session</option>
-                </select>
-                <select wire:model.live="period" title="Month" @disabled($navLocked)>
-                    @foreach($this->periodOptions as $p => $label)
-                        <option value="{{ $p }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
+            </label>
             <div class="rt-summary">
-                <span>{{ $this->summary() }}</span>
-                @if($dirty)
-                    <span class="rt-dirty">● Unsaved changes</span>
-                @elseif($savedSessionExists)
-                    <span class="rt-saved">● Saved</span>
-                @else
-                    <span class="rt-muted">● Not recorded yet</span>
-                @endif
+                <span>{{ count($sessions) }} session{{ count($sessions) === 1 ? '' : 's' }}@if(count($sessions)) · {{ collect($sessions)->where('recorded', true)->count() }} recorded @endif</span>
             </div>
         </div>
 
-        @if($offeringId || $creatingSession)
-            @if($creatingSession)
-                <div class="rt-newsession">
-                    <span class="rt-newsession-label">New session</span>
-                    <select wire:model.live="adHocProgramId" title="Program">
-                        <option value="">— program —</option>
-                        @foreach($this->programOptions as $id => $name)
-                            <option value="{{ $id }}">{{ $name }}</option>
-                        @endforeach
-                    </select>
-                    <input type="time" wire:model.live="adHocTime" title="Start time">
-                    <span class="rt-muted">to</span>
-                    <input type="time" wire:model="adHocEndTime" title="End time (optional)">
-                    <button type="button" class="rt-btn ghost" wire:click="cancelNewSession">Cancel</button>
-                    <span class="rt-muted">Add the players who attended below, then Save.</span>
-                    @error('adHocProgramId') <div class="rt-warn">{{ $message }}</div> @enderror
-                    @error('adHocTime') <div class="rt-warn">{{ $message }}</div> @enderror
-                    @if($this->overlappingTimeslots)
-                        <div class="rt-warn" style="flex-basis:100%;">⚠ A session already runs at {{ substr($adHocTime, 0, 5) }} on this date — {{ implode(', ', $this->overlappingTimeslots) }}. Only create a separate session if that's intended (e.g. a second team).</div>
+        <div class="rt-sessions">
+            <div class="rt-listlabel">Sessions on {{ $date ? \Illuminate\Support\Carbon::parse($date)->format('l, j M') : 'this day' }}</div>
+
+            @forelse($sessions as $s)
+                @php($isOpen = $offeringId === $s['id'] && ! $creatingSession)
+                <div class="rt-sc @if($isOpen) open @elseif($dirty) locked @endif">
+                    <div class="rt-sc-head" wire:click="toggleSession({{ $s['id'] }})">
+                        <span class="rt-sc-chev">▸</span>
+                        <span class="rt-sc-title">{{ $s['program'] }} <span class="rt-sc-time">· {{ $s['time'] }}</span></span>
+                        <span class="rt-sc-spacer"></span>
+                        <span class="rt-sc-meta">{{ $s['enrolled'] }} enrolled</span>
+                        @if($s['recorded'])
+                            <span class="rt-status saved"><span class="led"></span>Saved</span>
+                        @else
+                            <span class="rt-status pending"><span class="led"></span>Not recorded</span>
+                        @endif
+                    </div>
+                    @if($isOpen)
+                        <div class="rt-sc-body">
+                            @include('filament.pages.partials.run-training-recorder')
+                        </div>
                     @endif
                 </div>
-            @endif
+            @empty
+                <div class="rt-callout">No sessions scheduled on this day.</div>
+            @endforelse
 
-            <div class="rt-coachbar">
-                <span>Assign all to</span>
-                <select wire:model="bulkCoachId">
-                    <option value="">— unassigned —</option>
-                    @foreach($coachOptions as $id => $name)
-                        <option value="{{ $id }}">{{ $name }}</option>
-                    @endforeach
-                </select>
-                <button type="button" class="rt-btn" wire:click="assignAll" @disabled(empty($coachOptions))>Apply to all</button>
-                @if(empty($coachOptions))
-                    <span class="rt-muted">No coaches yet — add one with “+ Add coach”.</span>
-                @else
-                    <span class="rt-muted">Each player defaults to the timeslot's head coach.</span>
-                @endif
-                <span class="sep"></span>
-                @if($addingCoach)
-                    <input type="text" wire:model="newCoachName" placeholder="Coach name">
-                    <input type="email" wire:model="newCoachEmail" placeholder="Email (optional)">
-                    <button type="button" class="rt-btn" wire:click="saveCoach">Save coach</button>
-                    <button type="button" class="rt-btn ghost" wire:click="cancelAddCoach">Cancel</button>
-                    @error('newCoachName') <div class="rt-warn">{{ $message }}</div> @enderror
-                    @error('newCoachEmail') <div class="rt-warn">{{ $message }}</div> @enderror
-                @else
-                    <button type="button" class="rt-btn" wire:click="startAddCoach">+ Add coach</button>
-                @endif
-            </div>
-
-            @php($enrolled = collect($roster)->filter(fn ($r) => $r['type'] === 'enrolled'))
-            @php($extras = collect($roster)->reject(fn ($r) => $r['type'] === 'enrolled'))
-
-            <div class="rt-list">
-                @forelse($enrolled as $key => $row)
-                    @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'skills' => $skills, 'coachOptions' => $coachOptions, 'removable' => false])
-                @empty
-                    <div class="rt-muted">{{ $creatingSession ? 'New session — add the players who attended below.' : 'No players enrolled for this timeslot yet.' }}</div>
-                @endforelse
-            </div>
-
-            <div class="rt-section">
-                <div class="rt-section-head">
-                    <span class="rt-section-title">Walk-ins / Make-ups</span>
-                    <button type="button" class="rt-btn" wire:click="startAdd">+ Add participant</button>
+            <div class="rt-sc new @if($creatingSession) open @elseif($dirty) locked @endif">
+                <div class="rt-sc-head" wire:click="toggleNewSession">
+                    <span class="rt-sc-chev plus">＋</span>
+                    <span>Create new session</span>
+                    <span class="rt-sc-spacer"></span>
+                    <span class="rt-sc-meta">off-schedule / one-off clinic</span>
                 </div>
-
-                @if($adding)
-                    <div class="rt-add">
-                        <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search existing student — name or IC">
-
-                        <div class="rt-results">
-                            @forelse($this->results as $r)
-                                <div class="rt-result">
-                                    <span class="meta">
-                                        <strong>{{ $r['name'] }}</strong>
-                                        <span class="rt-muted">· IC {{ $r['ic'] ?? '—' }} · age {{ $r['age'] ?? '—' }} · {{ $r['program'] ?? 'not enrolled' }}</span>
-                                    </span>
-                                    <span class="rt-tag">{{ $r['type'] === 'make_up' ? 'Make-up · no fee' : 'Walk-in · RM'.number_format(($r['fee_sen'] ?? 0) / 100, 2) }}</span>
-                                    <button type="button" class="rt-btn" wire:click="addExisting({{ $r['id'] }})">Add</button>
-                                </div>
-                            @empty
-                                <div class="rt-muted">{{ mb_strlen(trim($search)) < 2 ? 'Type a name or IC to search…' : 'No matches.' }}</div>
-                            @endforelse
-                        </div>
-
-                        <div class="rt-new">
-                            @if($suggestion)
-                                <div class="rt-warn">
-                                    ⚠ “{{ $newName }}” resembles <strong>{{ $suggestion['name'] }}</strong> —
-                                    <button type="button" class="rt-btn" wire:click="addExisting({{ $suggestion['id'] }})">use existing</button>
-                                </div>
-                            @endif
-                            <input type="text" wire:model.live.debounce.400ms="newName" placeholder="New walk-in name">
-                            <input type="tel" wire:model="newPhone" placeholder="Phone">
-                            <input type="text" wire:model="newIc" placeholder="IC (optional)">
-                            <span class="rt-muted">Fee RM{{ number_format($walkInFeeSen / 100, 2) }}</span>
-                            <button type="button" class="rt-btn" wire:click="addNewWalkIn">Add walk-in</button>
-                            <button type="button" class="rt-btn ghost" wire:click="cancelAdd">Cancel</button>
-                        </div>
-
-                        @error('newName') <div class="rt-warn">{{ $message }}</div> @enderror
+                @if($creatingSession)
+                    <div class="rt-sc-body">
+                        @include('filament.pages.partials.run-training-recorder')
                     </div>
                 @endif
-
-                <div class="rt-added">
-                    @foreach($extras as $key => $row)
-                        @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'skills' => $skills, 'coachOptions' => $coachOptions, 'removable' => true])
-                    @endforeach
-                </div>
             </div>
-
-            <div class="rt-savebar">
-                @if($savedSessionExists)
-                    <button type="button" class="rt-delete" wire:click="deleteSession"
-                        wire:confirm="Delete this saved session and all its attendance + scores? This cannot be undone.">Delete session</button>
-                @endif
-                @if($dirty)
-                    <button type="button" class="rt-btn ghost" wire:click="discard"
-                        wire:confirm="Discard your unsaved changes?">Discard</button>
-                @endif
-                <button type="button" class="rt-save"
-                    @if($creatingSession && $this->overlappingTimeslots && count($roster))
-                        wire:confirm="A session already runs at that time on this date ({{ implode(', ', $this->overlappingTimeslots) }}). Create a second, separate session anyway?"
-                    @endif
-                    wire:click="save">Save session</button>
-            </div>
-        @else
-            <div class="rt-callout">Choose a timeslot above, or <strong>＋ Create new session</strong>, to record.</div>
-        @endif
+        </div>
     </div>
 </x-filament::page>
