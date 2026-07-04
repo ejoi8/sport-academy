@@ -15,18 +15,26 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 /**
- * Curated, scenario-tagged demo data.
+ * Demo data:
+ *  - Three recurring weekly programs (1-on-1, Group, Goalkeeper), ~4 sessions a month each.
+ *  - One Football Clinic one-off (the month's 2nd Saturday afternoon).
+ *  - 100 students per program, each attached to a parent account.
+ *  - An admin login: admin@admin.com / password.
  *
- * June (last month) is a completed month with attendance + rubric scores;
- * July (this month) holds fresh registrations whose sessions are still upcoming.
- * Parents/children are named "S# …" so each scenario is recognisable on the roster.
+ * Last month's occurrences are recorded (attendance + rubric scores); this month's are recorded
+ * up to today, leaving upcoming dates empty so the "not recorded yet" state shows.
  */
 class DemoSeeder extends Seeder
 {
+    private const COHORT_SIZE = 100;
+
+    private const FAMILY_SIZE = 4;
+
     /** @var Collection<int, Skill> */
     private Collection $skills;
 
@@ -39,14 +47,15 @@ class DemoSeeder extends Seeder
     /** @var array<string, array<string, mixed>> */
     private array $slots = [];
 
-    private ?Student $walkIn = null;
+    private int $icSeq = 0;
 
-    private ?Student $makeUp = null;
+    private int $parentSeq = 0;
 
     /** @var array<int, int> */
-    private array $allAbsentStudentIds = [];
+    private array $parentIds = [];
 
-    private int $icSeq = 0;
+    // Every demo login is "password"; hash it once (bcrypt is slow) and reuse the digest.
+    private string $password = '';
 
     public function run(): void
     {
@@ -57,7 +66,9 @@ class DemoSeeder extends Seeder
 
         $sport = Sport::where('name', 'Football')->firstOrFail();
         $this->skills = Skill::query()->orderBy('sort_order')->get();
+        $this->password = Hash::make('password');
 
+        $this->createAdmin();
         $this->createCoaches();
         $programs = $this->createPrograms($sport);
 
@@ -66,34 +77,59 @@ class DemoSeeder extends Seeder
         $currentPeriod = $currentMonth->format('Y-m');
         $historyPeriod = $historyMonth->format('Y-m');
 
+        // Three recurring weekly programs.
         $this->slots = [
-            '1on1-sat' => ['program' => '1-on-1', 'weekday' => 6, 'start' => '09:00', 'end' => '10:00', 'cap' => 3, 'price' => 28000, 'coach' => 'Farid', 'label' => '1on1·Sat'],
-            '1on1-sun' => ['program' => '1-on-1', 'weekday' => 7, 'start' => '09:00', 'end' => '10:00', 'cap' => 3, 'price' => 28000, 'coach' => 'Amir', 'label' => '1on1·Sun'],
-            'group-wed' => ['program' => 'Group', 'weekday' => 3, 'start' => '18:00', 'end' => '19:30', 'cap' => 14, 'price' => 12000, 'coach' => 'Farid', 'label' => 'Group·Wed'],
-            'group-sat' => ['program' => 'Group', 'weekday' => 6, 'start' => '10:00', 'end' => '11:30', 'cap' => 8, 'price' => 12000, 'coach' => 'Amir', 'label' => 'Group·Sat'],
-            'group-sun' => ['program' => 'Group', 'weekday' => 7, 'start' => '17:00', 'end' => '18:30', 'cap' => 14, 'price' => 12000, 'coach' => 'Lena', 'label' => 'Group·Sun'],
-            'group-mon-trial' => ['program' => 'Group', 'weekday' => 1, 'start' => '18:00', 'end' => '19:30', 'cap' => 10, 'price' => 12000, 'coach' => 'Farid', 'label' => 'TRIAL·Mon'],
-            'gk-thu' => ['program' => 'Goalkeeper', 'weekday' => 4, 'start' => '18:00', 'end' => '19:00', 'cap' => 8, 'price' => 15000, 'coach' => 'Lena', 'label' => 'GK·Thu'],
+            'one-to-one' => ['program' => '1-on-1', 'weekday' => 3, 'start' => '18:00', 'end' => '19:00', 'cap' => 120, 'price' => 28000, 'coach' => 'Farid', 'label' => '1-on-1'],
+            'group' => ['program' => 'Group', 'weekday' => 6, 'start' => '09:00', 'end' => '10:30', 'cap' => 120, 'price' => 12000, 'coach' => 'Amir', 'label' => 'Group'],
+            'goalkeeper' => ['program' => 'Goalkeeper', 'weekday' => 7, 'start' => '09:00', 'end' => '10:00', 'cap' => 120, 'price' => 15000, 'coach' => 'Lena', 'label' => 'Goalkeeper'],
         ];
 
-        // Recurring offerings: June (history) excludes the July-only trial slot.
         foreach ($this->slots as $code => $cfg) {
-            if ($code !== 'group-mon-trial') {
-                $this->offerings["$historyPeriod|$code"] = $this->makeOffering($programs, $cfg, $historyPeriod);
-            }
+            $this->offerings["$historyPeriod|$code"] = $this->makeOffering($programs, $cfg, $historyPeriod);
             $this->offerings["$currentPeriod|$code"] = $this->makeOffering($programs, $cfg, $currentPeriod);
+            $this->enrolFamilies(
+                $this->offerings["$currentPeriod|$code"],
+                $this->offerings["$historyPeriod|$code"],
+                $cfg['label'],
+            );
         }
 
-        $this->createFamilies($currentPeriod, $historyPeriod);
+        // Football Clinic one-off — the month's 2nd Saturday afternoon.
+        $secondSaturday = $currentMonth->copy();
+        while ($secondSaturday->dayOfWeekIso !== 6) {
+            $secondSaturday->addDay();
+        }
+        $secondSaturday->addWeek();
 
-        // A walk-in (no parent) used in one June session.
-        $this->walkIn = $this->makeStudent(null, 'WK Zara (walk-in)');
+        $clinic = Offering::create([
+            'program_id' => $programs['Football Clinic']->id,
+            'period' => $currentPeriod,
+            'schedule_type' => 'one_off',
+            'specific_date' => $secondSaturday->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'capacity' => 120,
+            'session_count' => 1,
+            'price_sen' => 9000,
+            'default_coach_id' => $this->coaches['Farid']->id,
+            'is_open' => true,
+        ]);
+        $this->offerings["$currentPeriod|clinic"] = $clinic;
+        $this->enrolFamilies($clinic, null, 'Clinic');
 
-        // A large cohort on the current Wednesday group slot so the roster can be tested at ~60.
-        $this->createLargeCohort($currentPeriod);
+        $this->assignParentRole();
 
         $this->generateHistory($historyMonth, $historyPeriod);
         $this->generateCurrentToDate($currentMonth, $currentPeriod);
+    }
+
+    private function createAdmin(): void
+    {
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@admin.com'],
+            ['name' => 'Admin', 'password' => $this->password, 'email_verified_at' => now()],
+        );
+        $admin->assignRole('super_admin');
     }
 
     private function createCoaches(): void
@@ -101,7 +137,7 @@ class DemoSeeder extends Seeder
         foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test'] as $name => $email) {
             $coach = User::firstOrCreate(
                 ['email' => $email],
-                ['name' => 'Coach '.$name, 'password' => Hash::make('password'), 'email_verified_at' => now()],
+                ['name' => 'Coach '.$name, 'password' => $this->password, 'email_verified_at' => now()],
             );
             $coach->assignRole('super_admin');
             $coach->assignRole('coach');
@@ -118,6 +154,7 @@ class DemoSeeder extends Seeder
             '1-on-1' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 28000, 'walk_in_fee_sen' => 8000, 'default_sessions' => 4]),
             'Group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group Training', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]),
             'Goalkeeper' => Program::create(['sport_id' => $sport->id, 'name' => 'Goalkeeper', 'base_price_sen' => 15000, 'walk_in_fee_sen' => 5000, 'default_sessions' => 4]),
+            'Football Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Football Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]),
         ];
     }
 
@@ -142,238 +179,146 @@ class DemoSeeder extends Seeder
         ]);
     }
 
-    private function createFamilies(string $currentPeriod, string $historyPeriod): void
+    /**
+     * Enrol 100 students (in families of four, each under its own parent) into a session — and into
+     * last month's offering too, when given, so history records.
+     */
+    private function enrolFamilies(Offering $current, ?Offering $history, string $label): void
     {
-        $families = [
-            ['code' => 'S1', 'surname' => 'Rahman', 'children' => [
-                ['name' => 'Adam', 'slots' => ['1on1-sat'], 'history' => true],
-            ]],
-            ['code' => 'S2', 'surname' => 'Tan', 'children' => [
-                ['name' => 'Bella', 'slots' => ['1on1-sun'], 'history' => true, 'makeup' => true],
-                ['name' => 'Cara', 'slots' => ['group-wed'], 'history' => true],
-            ]],
-            ['code' => 'S3', 'surname' => 'Kumar', 'children' => [
-                ['name' => 'Danish', 'slots' => ['group-wed', 'gk-thu'], 'history' => true],
-            ]],
-            ['code' => 'S4', 'surname' => 'Lim', 'children' => [
-                ['name' => 'Evan', 'slots' => ['group-sat'], 'history' => true],
-                ['name' => 'Faiz', 'slots' => ['group-sat'], 'history' => true],
-            ]],
-            ['code' => 'S5', 'surname' => 'Wong', 'children' => [
-                ['name' => 'Gina', 'slots' => ['1on1-sat'], 'history' => true],
-                ['name' => 'Hana', 'slots' => ['group-sun'], 'history' => true],
-                ['name' => 'Ivan', 'slots' => ['gk-thu'], 'history' => true],
-            ]],
-            ['code' => 'S6', 'surname' => 'Ismail', 'children' => [
-                ['name' => 'Jay', 'slots' => ['group-wed'], 'history' => true, 'julyStatus' => 'pending'],
-            ]],
-            ['code' => 'S7', 'surname' => 'Abdullah', 'children' => [
-                ['name' => 'Kira', 'slots' => ['1on1-sun'], 'history' => true, 'julyStatus' => 'overdue', 'allAbsent' => true],
-            ]],
-            ['code' => 'S8', 'surname' => 'Chan', 'children' => [
-                ['name' => 'Leo', 'slots' => ['gk-thu'], 'history' => false],
-            ]],
-            ['code' => 'S9', 'surname' => 'Ng', 'children' => [
-                ['name' => 'Omar', 'slots' => ['group-sat'], 'history' => true],
-                ['name' => 'Putra', 'slots' => ['group-sat'], 'history' => true],
-                ['name' => 'Qasim', 'slots' => ['group-sat'], 'history' => true],
-                ['name' => 'Rania', 'slots' => ['group-sat'], 'history' => true],
-                ['name' => 'Sam', 'slots' => ['group-sat'], 'history' => true],
-            ]],
-            ['code' => 'S10', 'surname' => 'FreshStart', 'children' => [
-                ['name' => 'Mia', 'slots' => ['group-mon-trial'], 'history' => false],
-                ['name' => 'Nael', 'slots' => ['group-mon-trial'], 'history' => false],
-            ]],
-        ];
+        $child = 0;
 
-        foreach ($families as $family) {
-            $parent = User::create([
-                'name' => $family['code'].' '.$family['surname'],
-                'email' => strtolower($family['code']).'.'.Str::slug($family['surname']).'@demo.test',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-            ]);
-            $parent->assignRole('parent');
+        for ($f = 1; $f <= (int) (self::COHORT_SIZE / self::FAMILY_SIZE); $f++) {
+            $parent = $this->makeParent($label.' family '.$f);
 
-            foreach ($family['children'] as $child) {
-                $labels = array_map(fn (string $code): string => $this->slotLabel($code), $child['slots']);
-                $student = $this->makeStudent($parent->id, $family['code'].' '.$child['name'].' ('.implode('+', $labels).')');
+            for ($c = 1; $c <= self::FAMILY_SIZE; $c++) {
+                $child++;
+                $student = $this->makeStudent($parent->id, $label.' '.str_pad((string) $child, 3, '0', STR_PAD_LEFT));
 
-                if (! empty($child['makeup'])) {
-                    $this->makeUp = $student;
-                }
-                if (! empty($child['allAbsent'])) {
-                    $this->allAbsentStudentIds[] = $student->id;
-                }
+                Enrollment::create([
+                    'student_id' => $student->id,
+                    'offering_id' => $current->id,
+                    'status' => $this->cohortStatus($child),
+                    'price_sen' => $current->price_sen,
+                    'sessions_included' => $current->session_count,
+                ]);
 
-                foreach ($child['slots'] as $code) {
-                    $julyOffering = $this->offerings["$currentPeriod|$code"];
-
-                    Enrollment::firstOrCreate(
-                        ['student_id' => $student->id, 'offering_id' => $julyOffering->id],
-                        [
-                            'status' => $child['julyStatus'] ?? 'active',
-                            'price_sen' => $julyOffering->price_sen,
-                            'sessions_included' => $julyOffering->session_count,
-                        ],
-                    );
-
-                    if (! empty($child['history']) && isset($this->offerings["$historyPeriod|$code"])) {
-                        $juneOffering = $this->offerings["$historyPeriod|$code"];
-                        Enrollment::firstOrCreate(
-                            ['student_id' => $student->id, 'offering_id' => $juneOffering->id],
-                            ['status' => 'active', 'price_sen' => $juneOffering->price_sen, 'sessions_included' => $juneOffering->session_count],
-                        );
-                    }
+                if ($history) {
+                    Enrollment::create([
+                        'student_id' => $student->id,
+                        'offering_id' => $history->id,
+                        'status' => 'active',
+                        'price_sen' => $history->price_sen,
+                        'sessions_included' => $history->session_count,
+                    ]);
                 }
             }
         }
+    }
+
+    /** A spread of payment statuses so the roster's badges vary. */
+    private function cohortStatus(int $i): string
+    {
+        return match (true) {
+            $i % 10 === 0 => 'overdue',
+            $i % 5 === 0 => 'pending',
+            default => 'active',
+        };
     }
 
     private function generateHistory(Carbon $historyMonth, string $historyPeriod): void
     {
         foreach ($this->slots as $code => $cfg) {
-            if ($code === 'group-mon-trial') {
-                continue; // July-only, no history
-            }
-
             $offering = $this->offerings["$historyPeriod|$code"] ?? null;
             if (! $offering) {
                 continue;
             }
 
-            $enrolled = Enrollment::query()
-                ->where('offering_id', $offering->id)
-                ->whereIn('status', ['active', 'pending', 'overdue'])
-                ->with('student')
-                ->get();
-
+            $enrolled = $this->enrolledStudents($offering);
             if ($enrolled->isEmpty()) {
                 continue;
             }
 
-            foreach ($this->weekdayDates($historyMonth, $cfg['weekday']) as $sessionIndex => $date) {
-                $session = TrainingSession::create([
-                    'offering_id' => $offering->id,
-                    'session_date' => $date->toDateString(),
-                    'coach_id' => $this->coaches[$cfg['coach']]->id,
-                    'created_by' => $this->coaches['Farid']->id,
-                ]);
-
-                foreach ($enrolled->values() as $ei => $enrollment) {
-                    $this->recordAttendance($session, $enrollment->student, $sessionIndex, $ei, 'enrolled');
-                }
-
-                // Walk-in in the 2nd Wednesday session; make-up in the 3rd Saturday session.
-                if ($code === 'group-wed' && $sessionIndex === 1 && $this->walkIn) {
-                    $this->recordAttendance($session, $this->walkIn, $sessionIndex, 90, 'walk_in', $offering->price_sen);
-                }
-                if ($code === 'group-sat' && $sessionIndex === 2 && $this->makeUp) {
-                    $this->recordAttendance($session, $this->makeUp, $sessionIndex, 70, 'make_up');
-                }
+            // Two past sessions is enough history for trends without a heavy seed.
+            foreach ($this->weekdayDates($historyMonth, $cfg['weekday'], 2) as $sessionIndex => $date) {
+                $this->recordSession($offering, $date, $sessionIndex, $enrolled);
             }
         }
     }
 
     /**
-     * Record the current month's sessions that have already happened (weekday dates up to today),
-     * leaving upcoming dates empty. So a coach opening a current timeslot sees recorded past
-     * sessions and the "Start session" empty state side by side.
+     * Record this month's sessions that have already happened (up to today), leaving upcoming dates
+     * empty so a coach sees recorded past sessions and the "not recorded yet" state side by side.
      */
     private function generateCurrentToDate(Carbon $currentMonth, string $currentPeriod): void
     {
         $today = today();
 
-        foreach ($this->slots as $code => $cfg) {
-            $offering = $this->offerings["$currentPeriod|$code"] ?? null;
-            if (! $offering) {
+        foreach ($this->offerings as $key => $offering) {
+            if (! str_starts_with($key, $currentPeriod.'|')) {
                 continue;
             }
 
-            $enrolled = Enrollment::query()
-                ->where('offering_id', $offering->id)
-                ->whereIn('status', ['active', 'pending', 'overdue'])
-                ->with('student')
-                ->get();
-
+            $enrolled = $this->enrolledStudents($offering);
             if ($enrolled->isEmpty()) {
                 continue;
             }
 
-            foreach ($this->weekdayDates($currentMonth, $cfg['weekday']) as $sessionIndex => $date) {
+            $dates = $offering->specific_date
+                ? collect([$offering->specific_date->copy()])
+                : $this->weekdayDates($currentMonth, (int) $offering->weekday);
+
+            foreach ($dates as $sessionIndex => $date) {
                 if ($date->gt($today)) {
-                    continue; // leave upcoming dates empty so the "Start session" state shows
+                    continue; // leave upcoming dates empty
                 }
 
-                $session = TrainingSession::create([
-                    'offering_id' => $offering->id,
-                    'session_date' => $date->toDateString(),
-                    'coach_id' => $this->coaches[$cfg['coach']]->id,
-                    'created_by' => $this->coaches['Farid']->id,
-                ]);
-
-                foreach ($enrolled->values() as $ei => $enrollment) {
-                    $this->recordAttendance($session, $enrollment->student, $sessionIndex, $ei, 'enrolled');
-                }
+                $this->recordSession($offering, $date, $sessionIndex, $enrolled);
             }
         }
     }
 
     /**
-     * A large cohort enrolled in the current Wednesday group slot so Run Training's roster can be
-     * exercised at scale — ~60 students, with a spread of payment statuses. Its already-passed
-     * dates this month carry the full roster; upcoming dates load it via "Start session".
+     * @return Collection<int, Enrollment>
      */
-    private function createLargeCohort(string $currentPeriod, string $code = 'group-wed', int $size = 60): void
+    private function enrolledStudents(Offering $offering): Collection
     {
-        $current = $this->offerings["$currentPeriod|$code"] ?? null;
+        return Enrollment::query()
+            ->where('offering_id', $offering->id)
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->with('student')
+            ->get();
+    }
 
-        if (! $current) {
-            return;
-        }
+    /**
+     * @param  Collection<int, Enrollment>  $enrolled
+     */
+    private function recordSession(Offering $offering, Carbon $date, int $sessionIndex, Collection $enrolled): void
+    {
+        $session = TrainingSession::create([
+            'offering_id' => $offering->id,
+            'session_date' => $date->toDateString(),
+            'coach_id' => $offering->default_coach_id,
+            'created_by' => $this->coaches['Farid']->id,
+        ]);
 
-        // Make sure the slot can hold the cohort.
-        $current->update(['capacity' => max($current->capacity, $size)]);
-
-        for ($i = 1; $i <= $size; $i++) {
-            $student = $this->makeStudent(null, 'Batch '.str_pad((string) $i, 2, '0', STR_PAD_LEFT).' (Group·Wed)');
-
-            // A spread of payment statuses so the roster's badges vary.
-            $status = match (true) {
-                $i % 10 === 0 => 'overdue',
-                $i % 5 === 0 => 'pending',
-                default => 'active',
-            };
-
-            Enrollment::firstOrCreate(
-                ['student_id' => $student->id, 'offering_id' => $current->id],
-                ['status' => $status, 'price_sen' => $current->price_sen, 'sessions_included' => $current->session_count],
-            );
+        foreach ($enrolled->values() as $ei => $enrollment) {
+            $this->recordAttendance($session, $enrollment, $sessionIndex, $ei);
         }
     }
 
-    private function recordAttendance(TrainingSession $session, Student $student, int $sessionIndex, int $ei, string $type, ?int $walkInFeeSen = null): void
+    private function recordAttendance(TrainingSession $session, Enrollment $enrollment, int $sessionIndex, int $ei): void
     {
-        $absent = in_array($student->id, $this->allAbsentStudentIds, true)
-            || ($ei % 8 === 0 && $sessionIndex === 3);
+        $absent = $ei % 8 === 0 && $sessionIndex === 1;
         $status = $absent ? 'absent' : (($ei % 6 === 0 && $sessionIndex === 1) ? 'late' : 'present');
-
-        // Link the attendance to the credit pool it consumes: the student's enrolment in
-        // this offering (enrolled), any enrolment they hold (make-up), or none (walk-in).
-        $enrollmentId = match ($type) {
-            'enrolled' => Enrollment::where('offering_id', $session->offering_id)->where('student_id', $student->id)->value('id'),
-            'make_up' => $student->enrollments()->value('id'),
-            default => null,
-        };
 
         $attendance = Attendance::create([
             'training_session_id' => $session->id,
-            'student_id' => $student->id,
-            'enrollment_id' => $enrollmentId,
-            'participant_type' => $type,
+            'student_id' => $enrollment->student_id,
+            'enrollment_id' => $enrollment->id,
+            'participant_type' => 'enrolled',
             'status' => $status,
             'coach_id' => $this->coachForIndex($ei),
-            'walk_in_fee_sen' => ($type === 'walk_in' && ! $absent) ? ($walkInFeeSen ?? 4000) : null,
+            'walk_in_fee_sen' => null,
             'marked_by' => $this->coaches['Farid']->id,
         ]);
 
@@ -381,26 +326,59 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        // Scores climb across the month (session 1 ≈ 2, session 4 ≈ 5). Bulk-inserted for speed.
+        // Scores climb across the month. Bulk-inserted for speed.
         $now = now();
         AssessmentScore::insert(
             $this->skills->map(fn (Skill $skill): array => [
                 'attendance_id' => $attendance->id,
                 'skill_id' => $skill->id,
-                'score' => min(5, max(1, 1 + $sessionIndex + (($ei + $skill->id) % 2))),
+                'score' => min(5, max(1, 2 + $sessionIndex + (($ei + $skill->id) % 2))),
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all(),
         );
     }
 
-    private function makeStudent(?int $parentId, string $name): Student
+    private function makeParent(string $name): User
+    {
+        $parent = User::create([
+            'name' => 'Parent '.$name,
+            'email' => 'parent'.(++$this->parentSeq).'@demo.test',
+            'password' => $this->password,
+            'email_verified_at' => now(),
+        ]);
+
+        // Role is bulk-assigned later (see assignParentRole) — calling assignRole per parent churns
+        // Spatie's permission cache and is dramatically slower at this scale.
+        $this->parentIds[] = $parent->id;
+
+        return $parent;
+    }
+
+    /** Assign the 'parent' role to every seeded parent in one insert, bypassing per-call cache churn. */
+    private function assignParentRole(): void
+    {
+        $roleId = Role::where('name', 'parent')->value('id');
+        $morph = (new User)->getMorphClass();
+
+        $rows = array_map(fn (int $id): array => [
+            'role_id' => $roleId,
+            'model_type' => $morph,
+            'model_id' => $id,
+        ], $this->parentIds);
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('model_has_roles')->insert($chunk);
+        }
+    }
+
+    private function makeStudent(int $parentId, string $name): Student
     {
         return Student::create([
             'parent_id' => $parentId,
             'name' => $name,
             'ic_number' => '07'.str_pad((string) (++$this->icSeq), 10, '0', STR_PAD_LEFT),
-            'dob' => now()->subYears(8 + ($this->icSeq % 6))->subMonths($this->icSeq)->toDateString(),
+            'dob' => now()->subYears(8 + ($this->icSeq % 6))->subMonths($this->icSeq % 12)->toDateString(),
             'gender' => $this->icSeq % 2 === 0 ? 'male' : 'female',
             'is_active' => true,
         ]);
@@ -422,7 +400,7 @@ class DemoSeeder extends Seeder
             $cursor->addDay();
         }
 
-        return $dates->take($limit);
+        return $dates->take($limit)->values();
     }
 
     private function coachForIndex(int $index): int
@@ -430,10 +408,5 @@ class DemoSeeder extends Seeder
         $names = ['Farid', 'Amir', 'Lena'];
 
         return $this->coaches[$names[$index % 3]]->id;
-    }
-
-    private function slotLabel(string $code): string
-    {
-        return $this->slots[$code]['label'] ?? $code;
     }
 }
