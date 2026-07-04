@@ -3,6 +3,10 @@
 Quick reference for how recording a session persists data. **Run Training is the only writer of
 attendance, scores and credit consumption.**
 
+The page is a **date → session accordion**: pick a date, every timeslot that runs on it appears
+as a collapsible card (with a Saved / Not-recorded pill), plus a "＋ Create new session" card.
+Expanding a card loads its roster; nothing below is written until **Save**.
+
 ## Tables written on Save
 
 | Table | When | What |
@@ -40,9 +44,12 @@ So writing the attendance **is** the credit consumption — computed on read, no
 
 ## New (ad-hoc) session — create-on-Save
 
-Choosing "＋ Create new session" (program + time) only **stages** it in memory. The `offerings`
-row is written **inside the Save transaction**, together with the session — so a started-but-never-saved
-session leaves **nothing** behind (no orphan timeslot).
+Expanding the "＋ Create new session" card (program + start/end time) only **stages** it in
+memory. The `offerings` row is written **inside the Save transaction**, together with the
+session — so a started-but-never-saved session leaves **nothing** behind (no orphan timeslot).
+A soft **overlap warning** (banner + confirm) fires when the staged time collides with a
+session already running that day — it warns, never blocks (a second team at the same hour is
+legitimate).
 
 ## Deleting
 

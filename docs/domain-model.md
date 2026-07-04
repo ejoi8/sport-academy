@@ -50,13 +50,13 @@ nothing links them — set it to 8 and the enrolment simply banks 8 credits.
 ### Session dates are never pre-generated — sessions are on-demand
 There is **no stored list of "the 4 July dates."** Setting up an offering creates none;
 booking creates none. A `training_sessions` row is born only when a coach opens Run Training,
-picks a date, and **saves** (`TrainingSession::firstOrCreate(offering + date)`). The dates in
-the picker are **computed in memory** (`defaultDateForOffering()` walks the month for the
-weekday) purely to suggest a default — never persisted. This is the "date = planning only,
-assessment on-demand" rule.
+picks a date, and **saves** (`TrainingSession::firstOrCreate(offering + date)`). The page's
+"sessions on this day" list is **computed in memory** (`offeringsOnDate()` matches recurring
+weekdays and one-off dates) — never persisted. This is the "date = planning only, assessment
+on-demand" rule.
 
 ### The roster = the offering's subscribers (+ anyone added that day)
-Opening a timeslot loads the roster from the **offering's** enrolments
+Expanding a session card loads the roster from the **offering's** enrolments
 (`active`/`pending`/`overdue`) — everyone subscribed to that slot. It's keyed by **offering,
 not date**, so the same subscribers appear on every session date in the month. Walk-ins /
 make-ups added on a date are overlaid once that date's session is saved.
@@ -93,10 +93,11 @@ force-delete, audit trail — are planned but deferred while in development.)
 2. **Booking.** Adam's parent enrols him. An enrolment is created: `status = active` (paid),
    `price_sen = 12000` (snapshot), `sessions_included = 4` (snapshot). → **Adam holds 4
    credits. Still no dates.**
-3. **Wed 9 July.** Coach Farid opens Run Training → picks *Group · Wed 6pm · July* → date
-   defaults to 9 July. The roster shows **Adam + the other enrolled kids**. Farid marks Adam
-   present, scores him, **Saves**. → A **TrainingSession** (9 Jul) and **Attendance** (linked
-   to his enrolment) now exist; Adam reads **`1 / 4`**.
+3. **Wed 9 July.** Coach Farid opens Run Training (the date defaults to today) → the day's
+   session list shows a *Group Training · 18:00* card → he expands it. The roster shows
+   **Adam + the other enrolled kids**. Farid marks Adam present, scores him, **Saves**. → A
+   **TrainingSession** (9 Jul) and **Attendance** (linked to his enrolment) now exist; Adam
+   reads **`1 / 4`**.
 4. **16, 23, 30 July.** Same slot, same subscribers, a new session each time → Adam reaches
    **`4 / 4`**.
 5. **Edge — Adam misses 16 July, comes Saturday instead.** On the Saturday offering, Farid
@@ -104,9 +105,10 @@ force-delete, audit trail — are planned but deferred while in development.)
    that consumes a Wednesday credit. Once all 4 are spent, the same search shows him as a
    **paying walk-in**.
 
-## Not built yet: planned sessions
+## Declined: planned sessions
 
-Sessions currently materialise only on save, and there's no coach-facing "N of M sessions run"
-signal — so a `session_count` above the weekly cadence can silently under-deliver. The proposed
-fix (planned sessions + multi-weekday offerings + an unfinished-slot list) is written up in
+Pre-generated session schedules (planned sessions + multi-weekday offerings) were considered
+and **declined** — they add ongoing management the academy doesn't want. Sessions stay
+on-demand. The shipped mitigation is the unused-credits tracking (Enrolment filters + dashboard
+widget). The full design record lives in
 [design-planned-sessions.md](design-planned-sessions.md).

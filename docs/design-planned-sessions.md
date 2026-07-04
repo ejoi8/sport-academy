@@ -69,8 +69,8 @@ So a slot can place more than ~4 dates a month.
 - **Schema:** `offerings.weekday` (single) → `offerings.weekdays` (JSON array of ISO days,
   e.g. `[1, 3]` for Mon+Wed). JSON is enough for MVP; a pivot table only if we later need to
   query "all Wednesday slots" efficiently.
-- **Touches:** `scheduleLabel()`, the date-snap logic (`defaultDateForOffering`), the form
-  (a multi-select), and date generation below.
+- **Touches:** `scheduleLabel()`, Run Training's day-session matching (`offeringsOnDate`),
+  the form (a multi-select), and date generation below.
 - **Migration:** backfill existing `weekday` into `weekdays`, then drop `weekday`.
 
 ---

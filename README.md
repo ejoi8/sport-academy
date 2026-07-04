@@ -9,9 +9,15 @@
 
 ## Project docs
 
+- [Handover](docs/handover.md) — **start here**: stack, setup, logins, invariants, decisions
+  log, and known gaps.
 - [Domain model & core concepts](docs/domain-model.md) — how programs, offerings, enrolments,
   session credits, and on-demand training sessions fit together (read before touching Run
   Training or enrolments).
+- [Run Training — what "Save" writes](docs/run-training-save.md) — exact persistence reference
+  for the recording screen.
+- [Design note — planned sessions](docs/design-planned-sessions.md) — a considered-and-declined
+  direction, kept as a record (Part A shipped; B–D are not a backlog).
 
 ## About Laravel
 
