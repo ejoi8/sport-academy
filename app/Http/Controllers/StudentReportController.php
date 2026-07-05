@@ -22,6 +22,7 @@ class StudentReportController extends Controller
             'student' => $student->load('parent'),
             'summary' => $student->assessmentSummary(),
             'attendance' => $student->attendanceCounts(),
+            'credits' => $student->creditSummary(),
         ]);
     }
 }

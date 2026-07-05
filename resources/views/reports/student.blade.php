@@ -6,6 +6,14 @@
     $total = array_sum($attendance);
     $attended = $present + $late;
     $overall = $summary->isNotEmpty() ? round($summary->avg('average'), 1) : null;
+
+    $creditLine = 'Sessions: purchased '.$credits['purchased'].' · attended '.$credits['attended'];
+    if ($credits['owed'] > 0) {
+        $creditLine .= ' · owed '.$credits['owed'];
+    }
+    if ($credits['over'] > 0) {
+        $creditLine .= ' · over '.$credits['over'];
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -58,6 +66,7 @@
             <div>
                 <h1>Student Progress Report</h1>
                 <div class="sub">{{ $student->name }}@if($student->age) · {{ $student->age }} yrs @endif @if($student->ic_number) · {{ $student->ic_number }}@endif</div>
+                <div class="sub">{{ $creditLine }}</div>
             </div>
             <div class="academy">
                 {{ config('app.name') }}

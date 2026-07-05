@@ -57,17 +57,43 @@ class Student extends Model
     /**
      * The oldest enrolment that still has an unexpired session credit to spend — the pool a
      * make-up would draw from. Null means no live credits, so the student is a paying walk-in.
+     *
+     * Make-up credits are same-program only (see docs/credits-policy.md) — Run Training is
+     * responsible for applying that restriction, and always passes the session's program id.
+     * Callers that pass null get today's any-program behaviour (generic credit lookups/tests).
      */
-    public function liveCreditEnrollment(): ?Enrollment
+    public function liveCreditEnrollment(?int $programId = null): ?Enrollment
     {
         return $this->enrollments()
             ->whereIn('status', ['active', 'pending', 'overdue'])
             ->where(fn ($query) => $query->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
+            ->when($programId, fn ($query) => $query->whereHas('offering', fn ($q) => $q->where('program_id', $programId)))
             ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->with('offering.program')
             ->orderBy('created_at')
             ->get()
             ->first(fn (Enrollment $enrollment): bool => $enrollment->creditsRemaining() > 0);
+    }
+
+    /**
+     * Lifetime session-credit totals across all live-status enrolments. Owed and over are summed
+     * PER ENROLMENT (a surplus in one month never nets against a shortfall in another).
+     *
+     * @return array{purchased:int, attended:int, owed:int, over:int}
+     */
+    public function creditSummary(): array
+    {
+        $enrollments = $this->enrollments()
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
+            ->get();
+
+        return [
+            'purchased' => (int) $enrollments->sum('sessions_included'),
+            'attended' => (int) $enrollments->sum('used_credits'),
+            'owed' => (int) $enrollments->sum(fn (Enrollment $enrollment): int => max(0, $enrollment->sessions_included - $enrollment->used_credits)),
+            'over' => (int) $enrollments->sum(fn (Enrollment $enrollment): int => max(0, $enrollment->used_credits - $enrollment->sessions_included)),
+        ];
     }
 
     /**

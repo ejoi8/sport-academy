@@ -53,8 +53,21 @@ class EnrollmentsTable
                 TextColumn::make('credits')
                     ->label('Credits used')
                     ->badge()
-                    ->color(fn (Enrollment $record): string => (int) $record->used_credits >= $record->sessions_included ? 'danger' : 'gray')
-                    ->state(fn (Enrollment $record): string => ((int) $record->used_credits).' / '.$record->sessions_included)
+                    ->color(function (Enrollment $record): string {
+                        $used = (int) $record->used_credits;
+
+                        return $used > $record->sessions_included
+                            ? 'danger'
+                            : ($record->sessions_included > 0 && $used >= $record->sessions_included ? 'warning' : 'gray');
+                    })
+                    ->state(function (Enrollment $record): string {
+                        $used = (int) $record->used_credits;
+                        $state = $used.' / '.$record->sessions_included;
+
+                        return $used > $record->sessions_included
+                            ? $state.' (+'.($used - $record->sessions_included).' over)'
+                            : $state;
+                    })
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('used_credits', $direction)),
                 TextColumn::make('created_at')
                     ->label('Enrolled')
@@ -67,6 +80,10 @@ class EnrollmentsTable
                     ->query(fn (Builder $query): Builder => $query
                         ->whereIn('status', ['active', 'pending', 'overdue'])
                         ->whereRaw("sessions_included > (select count(*) from attendances where attendances.enrollment_id = enrollments.id and attendances.status in ({$consuming}))")),
+                Filter::make('over_delivered')
+                    ->label('Over-delivered (past paid sessions)')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->whereRaw("(select count(*) from attendances where attendances.enrollment_id = enrollments.id and attendances.status in ({$consuming})) > sessions_included")),
                 Filter::make('attended')
                     ->label('Sessions attended')
                     ->schema([

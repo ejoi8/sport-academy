@@ -157,6 +157,22 @@ it('filters enrolments to those with credits remaining', function () {
         ->assertCanNotSeeTableRecords([$eDone]);
 });
 
+it('filters enrolments to those over-delivered past their paid sessions', function () {
+    $normal = Student::create(['name' => 'Normal', 'is_active' => true]);
+    $over = Student::create(['name' => 'Over delivered', 'is_active' => true]);
+
+    $eNormal = Enrollment::create(['student_id' => $normal->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    $eOver = Enrollment::create(['student_id' => $over->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 2]);
+
+    consumeCredits($eNormal, 2); // 2 / 4 — within paid sessions
+    consumeCredits($eOver, 3);  // 3 / 2 — over-delivered
+
+    Livewire::test(ListEnrollments::class)
+        ->filterTable('over_delivered')
+        ->assertCanSeeTableRecords([$eOver])
+        ->assertCanNotSeeTableRecords([$eNormal]);
+});
+
 it('filters enrolments by the number of sessions attended', function () {
     $two = Student::create(['name' => 'Attended two', 'is_active' => true]);
     $none = Student::create(['name' => 'Attended none', 'is_active' => true]);
