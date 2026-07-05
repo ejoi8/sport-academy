@@ -57,6 +57,17 @@ class DemoSeeder extends Seeder
     // Every demo login is "password"; hash it once (bcrypt is slow) and reuse the digest.
     private string $password = '';
 
+    // --- Scenario layer (kept out of $slots/$offerings so the generic history/current-to-date
+    // loops never touch it — every scenario session is scripted explicitly for determinism). ---
+    private ?Offering $scenarioSlotHistory = null;
+
+    private ?Offering $scenarioSlotCurrent = null;
+
+    /** @var array<int, TrainingSession> S1..S4, in date order. */
+    private array $scenarioSessions = [];
+
+    private ?Enrollment $gopalEnrollment = null;
+
     public function run(): void
     {
         $this->call([
@@ -117,10 +128,19 @@ class DemoSeeder extends Seeder
         $this->offerings["$currentPeriod|clinic"] = $clinic;
         $this->enrolFamilies($clinic, null, 'Clinic');
 
+        // --- Scenario layer: every credit/attendance edge case, scripted deterministically. ---
+        $this->createScenarioSlot($programs, $historyPeriod, $currentPeriod, $historyMonth);
+        $this->createOffScheduleSession($historyMonth);
+        $this->createRamadhanProgram($sport, $historyPeriod, $historyMonth);
+        $this->createSecondTeamOverlap($programs, $currentMonth);
+
         $this->assignParentRole();
 
         $this->generateHistory($historyMonth, $historyPeriod);
         $this->generateCurrentToDate($currentMonth, $currentPeriod);
+
+        // Gopal's cross-class make-up needs a MAIN offering's history session to already exist.
+        $this->attachGopalMakeUp($historyPeriod);
     }
 
     private function createAdmin(): void
@@ -213,6 +233,311 @@ class DemoSeeder extends Seeder
                 }
             }
         }
+    }
+
+    /**
+     * "Scenario slot" — a Group Training class closed for registration (is_open = false), created
+     * for both months, proving closed classes still record and display. The history side gets its
+     * first 4 Saturdays recorded as sessions S1-S4; the current side gets enrolments but no
+     * recorded sessions.
+     *
+     * @param  array<string, Program>  $programs
+     */
+    private function createScenarioSlot(array $programs, string $historyPeriod, string $currentPeriod, Carbon $historyMonth): void
+    {
+        $cfg = ['weekday' => 6, 'start' => '11:00', 'end' => '12:30', 'cap' => 20, 'price' => 12000, 'coach' => 'Lena'];
+
+        $base = [
+            'program_id' => $programs['Group']->id,
+            'schedule_type' => 'recurring',
+            'weekday' => $cfg['weekday'],
+            'start_time' => $cfg['start'],
+            'end_time' => $cfg['end'],
+            'capacity' => $cfg['cap'],
+            'session_count' => 4,
+            'price_sen' => $cfg['price'],
+            'default_coach_id' => $this->coaches[$cfg['coach']]->id,
+            'is_open' => false,
+        ];
+
+        $this->scenarioSlotHistory = Offering::create($base + ['period' => $historyPeriod]);
+        $this->scenarioSlotCurrent = Offering::create($base + ['period' => $currentPeriod]);
+
+        $this->scenarioSessions = $this->weekdayDates($historyMonth, $cfg['weekday'], 4)
+            ->map(fn (Carbon $date): TrainingSession => TrainingSession::create([
+                'offering_id' => $this->scenarioSlotHistory->id,
+                'session_date' => $date->toDateString(),
+                'coach_id' => $this->scenarioSlotHistory->default_coach_id,
+                'created_by' => $this->coaches['Farid']->id,
+            ]))
+            ->all();
+
+        $this->createScenarioStudents($historyMonth);
+    }
+
+    /**
+     * The named scenario students — one credit/attendance edge case each. Every history-slot
+     * enrolment shares sessions_included = 4 unless overridden.
+     */
+    private function createScenarioStudents(Carbon $historyMonth): void
+    {
+        $history = $this->scenarioSlotHistory;
+        $current = $this->scenarioSlotCurrent;
+        [$s1, $s2, $s3, $s4] = $this->scenarioSessions;
+
+        // Askar — paid up: present S1-S4 -> 4/4.
+        $askar = $this->makeStudent($this->makeParent('Scenario Askar')->id, 'SC Askar (paid-up)');
+        $askarEnrol = $this->scenarioEnrol($askar, $history);
+        foreach ($this->scenarioSessions as $session) {
+            $this->scenarioAttendance($session, $askar, $askarEnrol, 'enrolled', 'present');
+        }
+
+        // Bilal — over +2: sessions_included=2, present S1-S4 -> 4/2 over.
+        $bilal = $this->makeStudent($this->makeParent('Scenario Bilal')->id, 'SC Bilal (over +2)');
+        $bilalEnrol = $this->scenarioEnrol($bilal, $history, sessionsIncluded: 2);
+        foreach ($this->scenarioSessions as $session) {
+            $this->scenarioAttendance($session, $bilal, $bilalEnrol, 'enrolled', 'present');
+        }
+
+        // Chan — carry +3: present S1 only -> 3 left. Also a fresh current-month enrolment, so
+        // the July roster shows +3 carried.
+        $chan = $this->makeStudent($this->makeParent('Scenario Chan')->id, 'SC Chan (carry +3)');
+        $chanEnrol = $this->scenarioEnrol($chan, $history);
+        $this->scenarioAttendance($s1, $chan, $chanEnrol, 'enrolled', 'present');
+        $this->scenarioEnrol($chan, $current);
+
+        // Dina — excused: present S1,S2; excused S3,S4 -> used 2/4 (excused never consumes).
+        $dina = $this->makeStudent($this->makeParent('Scenario Dina')->id, 'SC Dina (excused)');
+        $dinaEnrol = $this->scenarioEnrol($dina, $history);
+        $this->scenarioAttendance($s1, $dina, $dinaEnrol, 'enrolled', 'present');
+        $this->scenarioAttendance($s2, $dina, $dinaEnrol, 'enrolled', 'present');
+        $this->scenarioAttendance($s3, $dina, $dinaEnrol, 'enrolled', 'excused');
+        $this->scenarioAttendance($s4, $dina, $dinaEnrol, 'enrolled', 'excused');
+
+        // Eddy — absent burns: present S1,S2; absent S3,S4 -> used 4/4 (a no-show still burns).
+        $eddy = $this->makeStudent($this->makeParent('Scenario Eddy')->id, 'SC Eddy (absent burns)');
+        $eddyEnrol = $this->scenarioEnrol($eddy, $history);
+        $this->scenarioAttendance($s1, $eddy, $eddyEnrol, 'enrolled', 'present');
+        $this->scenarioAttendance($s2, $eddy, $eddyEnrol, 'enrolled', 'present');
+        $this->scenarioAttendance($s3, $eddy, $eddyEnrol, 'enrolled', 'absent');
+        $this->scenarioAttendance($s4, $eddy, $eddyEnrol, 'enrolled', 'absent');
+
+        // Fara — cancelled enrolment, but one recorded attendance: proves cancelled enrolments
+        // keep history and the roster hydration guard.
+        $fara = $this->makeStudent($this->makeParent('Scenario Fara')->id, 'SC Fara (cancelled)');
+        $faraEnrol = $this->scenarioEnrol($fara, $history, status: 'cancelled');
+        $this->scenarioAttendance($s1, $fara, $faraEnrol, 'enrolled', 'present');
+
+        // Gopal — make-up: present S1,S2 on the scenario slot; a third credit is consumed via a
+        // SAME-PROGRAM (Group) MAIN offering's session via attachGopalMakeUp(), once that offering
+        // has recorded sessions. Make-up credits are same-program only (see credits-policy.md).
+        $gopal = $this->makeStudent($this->makeParent('Scenario Gopal')->id, 'SC Gopal (make-up)');
+        $this->gopalEnrollment = $this->scenarioEnrol($gopal, $history);
+        $this->scenarioAttendance($s1, $gopal, $this->gopalEnrollment, 'enrolled', 'present');
+        $this->scenarioAttendance($s2, $gopal, $this->gopalEnrollment, 'enrolled', 'present');
+
+        // Hana — walk-in: no parent, no IC. Fee only when attended.
+        $hana = $this->makeStudent(null, 'SC Hana (walk-in)', withIc: false);
+        $this->scenarioAttendance($s2, $hana, null, 'walk_in', 'present', walkInFeeSen: 4000);
+        $this->scenarioAttendance($s3, $hana, null, 'walk_in', 'absent', walkInFeeSen: null);
+
+        // Iman — expired leftovers: present S1, credits expire at the history month's last day, so
+        // the carry chip and make-up eligibility are both gone. Plus a fresh current enrolment.
+        $iman = $this->makeStudent($this->makeParent('Scenario Iman')->id, 'SC Iman (expired)');
+        $imanEnrol = $this->scenarioEnrol($iman, $history, creditsExpireAt: $historyMonth->copy()->endOfMonth());
+        $this->scenarioAttendance($s1, $iman, $imanEnrol, 'enrolled', 'present');
+        $this->scenarioEnrol($iman, $current);
+
+        // Jaya — pending, current-month only, no attendance.
+        $jaya = $this->makeStudent($this->makeParent('Scenario Jaya')->id, 'SC Jaya (pending)');
+        $this->scenarioEnrol($jaya, $current, status: 'pending');
+
+        // Kila — overdue, current-month only, no attendance.
+        $kila = $this->makeStudent($this->makeParent('Scenario Kila')->id, 'SC Kila (overdue)');
+        $this->scenarioEnrol($kila, $current, status: 'overdue');
+    }
+
+    /** Off-schedule recording — the scenario slot (a Saturday class) run on a Tuesday. */
+    private function createOffScheduleSession(Carbon $historyMonth): void
+    {
+        $secondTuesday = $this->weekdayDates($historyMonth, 2, 2)->last();
+        if (! $secondTuesday || ! $this->scenarioSlotHistory) {
+            return;
+        }
+
+        $session = TrainingSession::create([
+            'offering_id' => $this->scenarioSlotHistory->id,
+            'session_date' => $secondTuesday->toDateString(),
+            'coach_id' => $this->scenarioSlotHistory->default_coach_id,
+            'created_by' => $this->coaches['Farid']->id,
+        ]);
+
+        foreach (['SC Tue WalkIn 1', 'SC Tue WalkIn 2'] as $name) {
+            $walkIn = $this->makeStudent(null, $name);
+            $this->scenarioAttendance($session, $walkIn, null, 'walk_in', 'present', walkInFeeSen: 4000);
+        }
+    }
+
+    /**
+     * A one-month, inactive program: proves it keeps history but is hidden from Run Training's
+     * ad-hoc program picker. One history-only offering, 3 new students under a shared parent, and
+     * the first 2 Tuesdays recorded (all present).
+     */
+    private function createRamadhanProgram(Sport $sport, string $historyPeriod, Carbon $historyMonth): void
+    {
+        $program = Program::create([
+            'sport_id' => $sport->id,
+            'name' => 'Ramadhan Special',
+            'base_price_sen' => 8000,
+            'walk_in_fee_sen' => 3000,
+            'default_sessions' => 4,
+            'is_active' => false,
+        ]);
+
+        $offering = Offering::create([
+            'program_id' => $program->id,
+            'period' => $historyPeriod,
+            'schedule_type' => 'recurring',
+            'weekday' => 2,
+            'start_time' => '21:30',
+            'end_time' => '22:30',
+            'capacity' => 15,
+            'session_count' => 4,
+            'price_sen' => 8000,
+            'default_coach_id' => $this->coaches['Farid']->id,
+            'is_open' => true,
+        ]);
+
+        $parent = $this->makeParent('Ramadhan family');
+        $enrolments = collect(range(1, 3))->map(function (int $i) use ($parent, $offering): Enrollment {
+            $student = $this->makeStudent($parent->id, 'Ramadhan Student '.$i);
+
+            return $this->scenarioEnrol($student, $offering);
+        })->values();
+
+        foreach ($this->weekdayDates($historyMonth, 2, 2) as $sessionIndex => $date) {
+            $session = TrainingSession::create([
+                'offering_id' => $offering->id,
+                'session_date' => $date->toDateString(),
+                'coach_id' => $offering->default_coach_id,
+                'created_by' => $this->coaches['Farid']->id,
+            ]);
+
+            foreach ($enrolments as $enrolment) {
+                $this->scenarioAttendance($session, $enrolment->student, $enrolment, 'enrolled', 'present');
+            }
+        }
+    }
+
+    /**
+     * Second-team overlap: a one-off Group Training offering on the same date+time as the main
+     * recurring Group Sat 09:00-10:30 class, proving two same-time cards render for one date. Only
+     * recorded (with walk-ins) if that Saturday has already happened.
+     *
+     * @param  array<string, Program>  $programs
+     */
+    private function createSecondTeamOverlap(array $programs, Carbon $currentMonth): void
+    {
+        $firstSaturday = $currentMonth->copy()->startOfMonth();
+        while ($firstSaturday->dayOfWeekIso !== 6) {
+            $firstSaturday->addDay();
+        }
+
+        $offering = Offering::create([
+            'program_id' => $programs['Group']->id,
+            'period' => $currentMonth->format('Y-m'),
+            'schedule_type' => 'one_off',
+            'specific_date' => $firstSaturday->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:30',
+            'capacity' => 0,
+            'session_count' => 4,
+            'price_sen' => 12000,
+            'default_coach_id' => $this->coaches['Amir']->id,
+            'is_open' => true,
+        ]);
+
+        if ($firstSaturday->gt(today())) {
+            return;
+        }
+
+        $session = TrainingSession::create([
+            'offering_id' => $offering->id,
+            'session_date' => $firstSaturday->toDateString(),
+            'coach_id' => $offering->default_coach_id,
+            'created_by' => $this->coaches['Farid']->id,
+        ]);
+
+        foreach (['SC Team B WalkIn 1', 'SC Team B WalkIn 2', 'SC Team B WalkIn 3'] as $name) {
+            $walkIn = $this->makeStudent(null, $name);
+            $this->scenarioAttendance($session, $walkIn, null, 'walk_in', 'present', walkInFeeSen: 4000);
+        }
+    }
+
+    /**
+     * Gopal's third credit, consumed via a same-program make-up: an attendance recorded against
+     * his scenario enrolment (Group, via the scenario slot) but attached to the MAIN **Group**
+     * offering's already-recorded history session. Must run after generateHistory() so that
+     * session exists. He is never enrolled in that offering. Make-up credits are same-program
+     * only (see credits-policy.md) — his pool is a Group credit, so it can only pay for a Group
+     * session.
+     */
+    private function attachGopalMakeUp(string $historyPeriod): void
+    {
+        if (! $this->gopalEnrollment) {
+            return;
+        }
+
+        $mainOffering = $this->offerings["$historyPeriod|group"] ?? null;
+        $session = $mainOffering?->trainingSessions()->orderBy('session_date')->first();
+
+        if (! $session) {
+            return;
+        }
+
+        $this->scenarioAttendance($session, $this->gopalEnrollment->student, $this->gopalEnrollment, 'make_up', 'present');
+    }
+
+    private function scenarioEnrol(Student $student, Offering $offering, string $status = 'active', ?int $sessionsIncluded = null, ?Carbon $creditsExpireAt = null): Enrollment
+    {
+        return Enrollment::create([
+            'student_id' => $student->id,
+            'offering_id' => $offering->id,
+            'status' => $status,
+            'price_sen' => $offering->price_sen,
+            'sessions_included' => $sessionsIncluded ?? $offering->session_count,
+            'credits_expire_at' => $creditsExpireAt,
+        ]);
+    }
+
+    /** Records one attendance and, for present/late only, bulk-inserts rubric scores. */
+    private function scenarioAttendance(TrainingSession $session, Student $student, ?Enrollment $enrollment, string $participantType, string $status, ?int $walkInFeeSen = null): Attendance
+    {
+        $attendance = Attendance::create([
+            'training_session_id' => $session->id,
+            'student_id' => $student->id,
+            'enrollment_id' => $enrollment?->id,
+            'participant_type' => $participantType,
+            'status' => $status,
+            'coach_id' => $session->coach_id,
+            'walk_in_fee_sen' => $walkInFeeSen,
+            'marked_by' => $this->coaches['Farid']->id,
+        ]);
+
+        if (in_array($status, ['present', 'late'], true)) {
+            $now = now();
+            AssessmentScore::insert(
+                $this->skills->map(fn (Skill $skill): array => [
+                    'attendance_id' => $attendance->id,
+                    'skill_id' => $skill->id,
+                    'score' => 3,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all(),
+            );
+        }
+
+        return $attendance;
     }
 
     /** A spread of payment statuses so the roster's badges vary. */
@@ -372,14 +697,16 @@ class DemoSeeder extends Seeder
         }
     }
 
-    private function makeStudent(int $parentId, string $name): Student
+    private function makeStudent(?int $parentId, string $name, bool $withIc = true): Student
     {
+        $seq = ++$this->icSeq;
+
         return Student::create([
             'parent_id' => $parentId,
             'name' => $name,
-            'ic_number' => '07'.str_pad((string) (++$this->icSeq), 10, '0', STR_PAD_LEFT),
-            'dob' => now()->subYears(8 + ($this->icSeq % 6))->subMonths($this->icSeq % 12)->toDateString(),
-            'gender' => $this->icSeq % 2 === 0 ? 'male' : 'female',
+            'ic_number' => $withIc ? '07'.str_pad((string) $seq, 10, '0', STR_PAD_LEFT) : null,
+            'dob' => now()->subYears(8 + ($seq % 6))->subMonths($seq % 12)->toDateString(),
+            'gender' => $seq % 2 === 0 ? 'male' : 'female',
             'is_active' => true,
         ]);
     }
