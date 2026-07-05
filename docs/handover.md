@@ -116,11 +116,10 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
 
 ## Deferred / known gaps
 
-- **Enrolment guardrails** — lock `sessions_included` once attendance exists, block
-  force-delete, audit trail. Accepted risk while solo-operated.
+- **Enrolment guardrails, parent booking funnel, payment gateway** — planned in full detail in
+  [plan-next-features.md](plan-next-features.md) (self-contained; buildable by any agent).
 - **Ad-hoc one-offs appear in Catalog → Timeslots** (0-capacity rows). Cosmetic; an
   `is_ad_hoc` flag + filter would hide them if it starts to grate.
-- **Parent booking funnel / public site** — not started.
 - **Unused-credits list accumulates across months** (credits never expire) — a period filter
   exists on the Enrolment resource; revisit if the dashboard widget gets long.
 

@@ -20,6 +20,8 @@
   direction, kept as a record (Part A shipped; B–D are not a backlog).
 - [Session credits — policy (SOP/TNC source)](docs/credits-policy.md) — the plain-English rules
   for credits, carry-over, and make-ups that Run Training enforces automatically.
+- [Execution plan — next features](docs/plan-next-features.md) — self-contained build plan for
+  enrolment guardrails, the parent booking funnel, and the payment gateway.
 
 ## About Laravel
 
