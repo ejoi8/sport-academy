@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 use Spatie\Permission\Models\Role;
 use UnitEnum;
 
@@ -38,8 +39,14 @@ class RunTraining extends Page
 
     protected static ?string $title = 'Run Training';
 
+    // The open session's id, synced to `?session=` so a card is deep-linkable. Only the id is
+    // ever exposed — never roster contents (student names must never reach the URL or logs).
+    #[Url(as: 'session', history: false)]
     public ?int $offeringId = null;
 
+    // Synced to `?date=` so the page is refresh-safe and bookmarkable. `except: ''` keeps a
+    // bare page load (which mount() fills in with today()) from ever showing `?date=` at all.
+    #[Url(as: 'date', history: false, except: '')]
     public string $date = '';
 
     /** @var array<string, array<string, mixed>> */
@@ -63,6 +70,8 @@ class RunTraining extends Page
     public bool $adding = false;
 
     public string $search = '';
+
+    public string $rosterFilter = '';
 
     public string $newName = '';
 
@@ -89,9 +98,48 @@ class RunTraining extends Page
 
     public string $adHocEndTime = '';
 
+    /**
+     * The program of the session being recorded — the open offering's program, or the staged
+     * ad-hoc session's chosen program. Make-up credits are same-program only (see credits-policy).
+     */
+    protected function currentProgramId(): ?int
+    {
+        if ($this->creatingSession) {
+            return $this->adHocProgramId;
+        }
+
+        if (! $this->offeringId) {
+            return null;
+        }
+
+        return Offering::whereKey($this->offeringId)->value('program_id');
+    }
+
     public function mount(): void
     {
-        $this->date = today()->toDateString();
+        // 1. URL wins: `date`/`offeringId` are already hydrated from the query string by the
+        // #[Url] attributes at this point. Blank or unparseable (e.g. `?date=banana`) falls back
+        // to today; a parseable-but-oddly-formatted value (e.g. `2026-7-5`) is normalised so later
+        // string comparisons (offeringsOnDate, TrainingSession lookups) all agree on one format.
+        try {
+            $this->date = blank($this->date) ? today()->toDateString() : Carbon::parse($this->date)->toDateString();
+        } catch (\Throwable) {
+            $this->date = today()->toDateString();
+        }
+
+        // 2. Validate: a `session` id only survives if it actually runs on the resolved date —
+        // drops bogus ids, ids for a different date, and (today) anything an unauthorised link
+        // might carry. Silent, not an error: the coach just sees the day's session list instead.
+        if ($this->offeringId && ! $this->offeringsOnDate($this->date)->pluck('id')->contains($this->offeringId)) {
+            $this->offeringId = null;
+        }
+
+        // 3. Only when nothing (valid) came from the URL does auto-expand kick in — a URL-provided
+        // session takes precedence over the lone-session convenience.
+        if ($this->offeringId === null) {
+            $this->expandLoneSession();
+        }
+
         $this->loadRoster();
     }
 
@@ -105,6 +153,7 @@ class RunTraining extends Page
         $this->offeringId = null;
         $this->creatingSession = false;
         $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
+        $this->expandLoneSession();
         $this->loadRoster();
     }
 
@@ -250,6 +299,7 @@ class RunTraining extends Page
     {
         $this->expandedKey = null;
         $this->adding = false;
+        $this->rosterFilter = '';
         $this->roster = [];
         $this->dirty = false;
         $this->savedSessionExists = false;
@@ -279,6 +329,9 @@ class RunTraining extends Page
 
         if ($session) {
             $this->savedSessionExists = true;
+            // A recorded session keeps the coach who actually led it, even if the slot's default changed since.
+            $this->headCoachId = $session->coach_id ?? $this->headCoachId;
+            $this->bulkCoachId = $this->headCoachId;
             $this->hydrateFromSession($session);
         }
     }
@@ -289,28 +342,46 @@ class RunTraining extends Page
      */
     protected function loadEnrolledRoster(): void
     {
-        Enrollment::query()
+        $enrollments = Enrollment::query()
             ->where('offering_id', $this->offeringId)
             ->whereIn('status', ['active', 'pending', 'overdue'])
             ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->with('student')
-            ->get()
-            ->each(function (Enrollment $enrollment): void {
-                if (! $enrollment->student) {
-                    return;
-                }
+            ->get();
 
-                $this->roster['s'.$enrollment->student_id] = $this->makeRow(
-                    $enrollment->student,
-                    ParticipantType::Enrolled->value,
-                    [
-                        'payment_status' => $enrollment->status->value,
-                        'credits_used' => (int) $enrollment->used_credits,
-                        'credits_total' => $enrollment->sessions_included,
-                        'enrollment_id' => $enrollment->id,
-                    ],
-                );
-            });
+        $studentIds = $enrollments->pluck('student_id');
+
+        // Carry-over: unfinished sessions left on the student's OTHER live enrolments (other months
+        // or classes) — spendable here as make-ups. Policy is that unused credits accumulate and
+        // never expire by default, so this can build up across enrolments; one batched query avoids
+        // an N+1 per roster row.
+        $carryOver = Enrollment::query()
+            ->whereIn('student_id', $studentIds)
+            ->where('offering_id', '!=', $this->offeringId)
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->where(fn ($q) => $q->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
+            ->withCount(['attendances as used_credits' => fn ($q) => $q->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
+            ->get()
+            ->groupBy('student_id')
+            ->map(fn ($enrollments) => $enrollments->sum(fn ($e) => max(0, $e->sessions_included - $e->used_credits)));
+
+        $enrollments->each(function (Enrollment $enrollment) use ($carryOver): void {
+            if (! $enrollment->student) {
+                return;
+            }
+
+            $this->roster['s'.$enrollment->student_id] = $this->makeRow(
+                $enrollment->student,
+                ParticipantType::Enrolled->value,
+                [
+                    'payment_status' => $enrollment->status->value,
+                    'credits_used' => (int) $enrollment->used_credits,
+                    'credits_total' => $enrollment->sessions_included,
+                    'enrollment_id' => $enrollment->id,
+                    'carry_over' => (int) ($carryOver[$enrollment->student_id] ?? 0),
+                ],
+            );
+        });
     }
 
     /**
@@ -360,6 +431,7 @@ class RunTraining extends Page
             'credits_used' => null,     // credits already consumed on the source enrolment
             'credits_total' => null,    // the source enrolment's session count
             'enrollment_id' => null,    // which enrolment this row consumes a credit from
+            'carry_over' => null,       // unused live credits from the student's other enrolments
             'coach_id' => $this->headCoachId,
             'status' => AttendanceStatus::Present->value,
             'scores' => $this->skills->mapWithKeys(fn (Skill $skill): array => [$skill->id => null])->all(),
@@ -434,15 +506,17 @@ class RunTraining extends Page
         }
 
         $onRoster = collect($this->roster)->pluck('student_id')->filter()->all();
+        $programId = $this->currentProgramId();
 
         return Student::query()
             ->where(fn ($query) => $query->where('name', 'like', "%{$term}%")->orWhere('ic_number', 'like', "%{$term}%"))
             ->whereNotIn('id', $onRoster)
             ->limit(10)
             ->get()
-            ->map(function (Student $student): array {
-                // Make-up only if they still hold a live credit; otherwise a paying walk-in.
-                $makeUp = $student->liveCreditEnrollment();
+            ->map(function (Student $student) use ($programId): array {
+                // Make-up only if they still hold a live credit in THIS session's program;
+                // otherwise a paying walk-in (no program context yet forces walk-in too).
+                $makeUp = $programId ? $student->liveCreditEnrollment($programId) : null;
 
                 return [
                     'id' => $student->id,
@@ -453,6 +527,7 @@ class RunTraining extends Page
                     'type' => $makeUp ? ParticipantType::MakeUp->value : ParticipantType::WalkIn->value,
                     'fee_sen' => $makeUp ? null : $this->walkInFeeSen,
                     'credits_left' => $makeUp?->creditsRemaining(),
+                    'payment_status' => $makeUp?->status->value,
                 ];
             })
             ->all();
@@ -484,7 +559,7 @@ class RunTraining extends Page
         return $match ? ['id' => $match->id, 'name' => $match->name] : null;
     }
 
-    public function addExisting(int $studentId): void
+    public function addExisting(int $studentId, bool $forceWalkIn = false): void
     {
         $key = 's'.$studentId;
 
@@ -501,8 +576,10 @@ class RunTraining extends Page
             return;
         }
 
-        // Make-up only if they still hold a live credit; otherwise a paying walk-in.
-        $makeUp = $student->liveCreditEnrollment();
+        // Make-up only if they still hold a live credit in THIS session's program; otherwise a
+        // paying walk-in. The coach can also force a walk-in even when a make-up is available.
+        $programId = $this->currentProgramId();
+        $makeUp = ($forceWalkIn || ! $programId) ? null : $student->liveCreditEnrollment($programId);
 
         $this->roster[$key] = $this->makeRow(
             $student,
@@ -640,57 +717,112 @@ class RunTraining extends Page
             return;
         }
 
-        DB::transaction(function (): void {
-            // Staging a new session: create its one-off timeslot now, in the same transaction as the
-            // session — so an abandoned session (never saved) leaves no orphan timeslot behind.
-            if ($this->creatingSession) {
-                $this->offeringId = $this->createAdHocOffering()->id;
-                $this->creatingSession = false;
-            }
+        // Captured up front: if the transaction below throws, the DB rolls back but these two
+        // properties would otherwise keep the rolled-back (e.g. newly created ad-hoc) offering id.
+        $originalOfferingId = $this->offeringId;
+        $originalCreating = $this->creatingSession;
 
-            $session = TrainingSession::firstOrCreate(
-                ['offering_id' => $this->offeringId, 'session_date' => $this->date],
-                ['coach_id' => $this->headCoachId, 'created_by' => Auth::id()],
-            );
+        try {
+            DB::transaction(function (): void {
+                // Staging a new session: create its one-off timeslot now, in the same transaction as the
+                // session — so an abandoned session (never saved) leaves no orphan timeslot behind.
+                if ($this->creatingSession) {
+                    $this->offeringId = $this->createAdHocOffering()->id;
+                    $this->creatingSession = false;
+                }
 
-            // Keep the session's lead coach aligned with the timeslot's head coach.
-            if ($session->coach_id !== $this->headCoachId) {
-                $session->update(['coach_id' => $this->headCoachId]);
-            }
+                $session = TrainingSession::firstOrCreate(
+                    ['offering_id' => $this->offeringId, 'session_date' => $this->date],
+                    ['coach_id' => $this->headCoachId, 'created_by' => Auth::id()],
+                );
 
-            // Write one attendance row per roster entry, remembering each id.
-            $attendanceIdByStudent = [];
+                // Keep the session's lead coach aligned with the timeslot's head coach.
+                if ($session->coach_id !== $this->headCoachId) {
+                    $session->update(['coach_id' => $this->headCoachId]);
+                }
 
-            foreach ($this->roster as $key => $row) {
-                $studentId = $this->resolveStudentId($key, $row);
-                $attendance = $this->writeAttendance($session, $studentId, $row);
-                $attendanceIdByStudent[$studentId] = $attendance->id;
-            }
+                // Write one attendance row per roster entry, remembering each id.
+                $attendanceIdByStudent = [];
 
-            // Replace this session's rubric scores in just two statements — one delete then
-            // one bulk insert — instead of a query per player per skill.
-            AssessmentScore::query()
-                ->whereIn('attendance_id', array_values($attendanceIdByStudent))
-                ->delete();
+                foreach ($this->roster as $key => $row) {
+                    $studentId = $this->resolveStudentId($key, $row);
+                    $attendance = $this->writeAttendance($session, $studentId, $row);
+                    $attendanceIdByStudent[$studentId] = $attendance->id;
+                }
 
-            $scoreRows = $this->buildScoreRows($attendanceIdByStudent);
+                // Replace this session's rubric scores in just two statements — one delete then
+                // one bulk insert — instead of a query per player per skill.
+                AssessmentScore::query()
+                    ->whereIn('attendance_id', array_values($attendanceIdByStudent))
+                    ->delete();
 
-            if ($scoreRows !== []) {
-                AssessmentScore::insert($scoreRows);
-            }
+                $scoreRows = $this->buildScoreRows($attendanceIdByStudent);
 
-            // Remove anyone no longer on the roster (their scores cascade away).
-            Attendance::query()
-                ->where('training_session_id', $session->id)
-                ->whereNotIn('student_id', array_keys($attendanceIdByStudent))
-                ->delete();
-        });
+                if ($scoreRows !== []) {
+                    AssessmentScore::insert($scoreRows);
+                }
+
+                // Remove anyone no longer on the roster (their scores cascade away).
+                Attendance::query()
+                    ->where('training_session_id', $session->id)
+                    ->whereNotIn('student_id', array_keys($attendanceIdByStudent))
+                    ->delete();
+            });
+        } catch (\Throwable $e) {
+            $this->offeringId = $originalOfferingId;
+            $this->creatingSession = $originalCreating;
+
+            throw $e;
+        }
 
         $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
         $this->dirty = false;
         $this->savedSessionExists = true;
 
-        Notification::make()->success()->title('Training session saved')->send();
+        $overCount = $this->refreshCreditCounters();
+
+        $notification = Notification::make()->success()->title('Training session saved');
+
+        if ($overCount > 0) {
+            $notification->body(
+                $overCount === 1
+                    ? '1 player is now over their paid sessions.'
+                    : "{$overCount} players are now over their paid sessions.",
+            );
+        }
+
+        $notification->send();
+    }
+
+    /**
+     * After a save, re-count credits used on every enrolment touched by this roster — so the
+     * badges reflect the just-written attendance rather than the (now stale) counts loaded when
+     * the roster was first opened — and report how many are now over their paid sessions.
+     */
+    protected function refreshCreditCounters(): int
+    {
+        $enrollmentIds = collect($this->roster)->pluck('enrollment_id')->filter()->unique()->values();
+
+        if ($enrollmentIds->isEmpty()) {
+            return 0;
+        }
+
+        $enrollments = Enrollment::query()
+            ->whereIn('id', $enrollmentIds)
+            ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
+            ->get();
+
+        $usedByEnrollment = $enrollments->pluck('used_credits', 'id');
+
+        foreach ($this->roster as $key => $row) {
+            $enrollmentId = $row['enrollment_id'] ?? null;
+
+            if ($enrollmentId && $usedByEnrollment->has($enrollmentId)) {
+                $this->roster[$key]['credits_used'] = (int) $usedByEnrollment[$enrollmentId];
+            }
+        }
+
+        return $enrollments->filter(fn (Enrollment $enrollment): bool => (int) $enrollment->used_credits > $enrollment->sessions_included)->count();
     }
 
     /**
@@ -745,8 +877,10 @@ class RunTraining extends Page
             'note' => filled($row['note'] ?? null) ? $row['note'] : null,
             'marked_by' => Auth::id(),
             // The credit pool this consumes: own enrolment (enrolled), a live-credit pool
-            // (make-up) or none (walk-in). A pool already resolved on a prior save is kept.
-            'enrollment_id' => $isWalkIn ? null : ($attendance->enrollment_id ?? $this->resolveEnrollmentId($studentId, $row['type'])),
+            // (make-up) or none (walk-in). The pool resolved when the row was added is kept
+            // (roster rows already carry it in $row['enrollment_id']); a fresh resolve is only
+            // a fallback for rows that somehow arrive without one.
+            'enrollment_id' => $isWalkIn ? null : ($attendance->enrollment_id ?? $row['enrollment_id'] ?? $this->resolveEnrollmentId($studentId, $row['type'])),
         ]);
 
         $attendance->save();
@@ -768,7 +902,7 @@ class RunTraining extends Page
         }
 
         if ($type === ParticipantType::MakeUp->value) {
-            return Student::find($studentId)?->liveCreditEnrollment()?->id;
+            return Student::find($studentId)?->liveCreditEnrollment($this->currentProgramId())?->id;
         }
 
         return null;
@@ -880,9 +1014,9 @@ class RunTraining extends Page
 
     /**
      * The sessions that run on the selected date — one collapsible card each. Carries a light
-     * summary (enrolled count + whether it's already recorded) for the collapsed header.
+     * summary (enrolled count, attended count once recorded, time range, coach) for the header.
      *
-     * @return array<int, array{id:int, program:string, time:string, enrolled:int, recorded:bool}>
+     * @return array<int, array{id:int, program:string, time:string, coach:?string, enrolled:int, attended:int, recorded:bool}>
      */
     #[Computed]
     public function sessionsOnDate(): array
@@ -903,20 +1037,21 @@ class RunTraining extends Page
             ->pluck('total', 'offering_id')
             ->all();
 
-        $recorded = array_flip(
-            TrainingSession::query()
-                ->whereIn('offering_id', $ids)
-                ->where('session_date', $this->date)
-                ->pluck('offering_id')
-                ->all()
-        );
+        $sessions = TrainingSession::query()
+            ->whereIn('offering_id', $ids)
+            ->where('session_date', $this->date)
+            ->withCount('attendances')
+            ->get()
+            ->keyBy('offering_id');
 
         return $offerings->map(fn (Offering $offering): array => [
             'id' => $offering->id,
             'program' => $offering->program?->name ?? 'Session',
-            'time' => substr((string) $offering->start_time, 0, 5),
+            'time' => substr((string) $offering->start_time, 0, 5).($offering->end_time ? '–'.substr((string) $offering->end_time, 0, 5) : ''),
+            'coach' => $offering->defaultCoach?->name,
             'enrolled' => (int) ($enrolled[$offering->id] ?? 0),
-            'recorded' => isset($recorded[$offering->id]),
+            'attended' => (int) ($sessions[$offering->id]->attendances_count ?? 0),
+            'recorded' => isset($sessions[$offering->id]),
         ])->all();
     }
 
@@ -984,8 +1119,22 @@ class RunTraining extends Page
     }
 
     /**
-     * Open timeslots that have a session on the given date: recurring slots whose weekday and month
-     * match, plus one-off slots on exactly that date.
+     * When exactly one session runs on the selected date, open it — the overwhelmingly common case.
+     */
+    protected function expandLoneSession(): void
+    {
+        $onDate = $this->offeringsOnDate($this->date);
+
+        if ($onDate->count() === 1) {
+            $this->offeringId = $onDate->first()->id;
+        }
+    }
+
+    /**
+     * Timeslots that have a session on the given date: recurring slots whose weekday and month
+     * match, one-off slots on exactly that date, or any offering with a recorded session on that
+     * date (so an off-schedule recording, once saved, stays reachable). `is_open` is deliberately
+     * not filtered here — it gates new REGISTRATIONS, not whether a class can be delivered/recorded.
      *
      * @return Collection<int, Offering>
      */
@@ -998,7 +1147,6 @@ class RunTraining extends Page
         $carbon = Carbon::parse($date);
 
         return Offering::query()
-            ->where('is_open', true)
             ->where(function (Builder $query) use ($carbon, $date): void {
                 $query
                     ->where(fn (Builder $recurring) => $recurring
@@ -1007,11 +1155,12 @@ class RunTraining extends Page
                         ->where('period', $carbon->format('Y-m')))
                     ->orWhere(fn (Builder $oneOff) => $oneOff
                         ->where('schedule_type', ScheduleType::OneOff->value)
-                        ->whereDate('specific_date', $date));
+                        ->whereDate('specific_date', $date))
+                    ->orWhereHas('trainingSessions', fn (Builder $sessions) => $sessions->whereDate('session_date', $date));
             })
-            ->with('program')
-            ->orderBy('program_id')
+            ->with(['program', 'defaultCoach'])
             ->orderBy('start_time')
+            ->orderBy('program_id')
             ->get();
     }
 

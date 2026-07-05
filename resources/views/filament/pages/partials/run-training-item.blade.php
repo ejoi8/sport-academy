@@ -4,8 +4,11 @@
 @php($absent = in_array($row['status'], ['absent', 'excused'], true))
 @php($fullyScored = $total > 0 && $scored === $total && ! $absent)
 @php($coachName = $coachOptions[$row['coach_id']] ?? null)
+@php($used = (int) ($row['credits_used'] ?? 0))
+@php($totalCredits = (int) ($row['credits_total'] ?? 0))
+@php($over = $row['type'] === 'enrolled' && ! is_null($row['credits_total'] ?? null) && (int) ($row['credits_total']) > 0 && $used > $totalCredits)
 
-<div class="rt-item {{ $isOpen ? 'open' : '' }} {{ $fullyScored ? 'done' : ($absent ? 'excused' : '') }}">
+<div class="rt-item {{ $isOpen ? 'open' : '' }} {{ $fullyScored ? 'done' : ($absent ? 'excused' : '') }} {{ $over ? 'overlimit' : '' }}">
     <div class="rt-row" role="button" tabindex="0" aria-expanded="{{ $isOpen ? 'true' : 'false' }}"
         wire:click="toggle('{{ $key }}')"
         wire:keydown.enter="toggle('{{ $key }}')"
@@ -13,16 +16,30 @@
         <span class="chev" aria-hidden="true">▾</span>
         <span class="rt-name">
             {{ $row['name'] }}
-            <span class="rt-sub">@if($row['student_id'] ?? null)ID {{ $row['student_id'] }}@else new @endif@if(! empty($row['ic'])) · No. KP {{ $row['ic'] }}@endif</span>
+            <span class="rt-sub">@if($row['student_id'] ?? null)ID {{ $row['student_id'] }}@else new @endif@if(! empty($row['ic'])) · No. KP {{ $row['ic'] }}@endif@if($over) · <span class="rt-overnote">no paid credits left — renewal due</span>@endif</span>
         </span>
 
         @if($row['type'] === 'enrolled')
-            @php($used = (int) ($row['credits_used'] ?? 0))
-            @php($totalCredits = (int) ($row['credits_total'] ?? 0))
-            <span class="rt-badge pay-{{ $row['payment_status'] }}">{{ $row['payment_status'] === 'active' ? 'paid' : $row['payment_status'] }}</span>
-            <span class="rt-badge credits {{ $totalCredits > 0 && $used >= $totalCredits ? 'over' : '' }}" title="Sessions used of paid credits">{{ $used }}/{{ $totalCredits }}</span>
+            @if($row['payment_status'])
+                <span class="rt-badge pay-{{ $row['payment_status'] }}">{{ $row['payment_status'] === 'active' ? 'paid' : $row['payment_status'] }}</span>
+            @endif
+            @if(! is_null($row['credits_total']))
+                @if($used < $totalCredits)
+                    <span class="rt-badge credits" title="Sessions used of paid credits">{{ $used }}/{{ $totalCredits }}</span>
+                @elseif($used === $totalCredits && $totalCredits > 0)
+                    <span class="rt-badge credits full" title="Sessions used of paid credits">{{ $used }}/{{ $totalCredits }} · paid up</span>
+                @else
+                    <span class="rt-badge credits over" title="Sessions used of paid credits">{{ $used }}/{{ $totalCredits }} · +{{ $used - $totalCredits }} over</span>
+                @endif
+            @endif
+            @if(($row['carry_over'] ?? 0) > 0)
+                <span class="rt-badge carry" title="Unused sessions from other enrolments — usable as make-ups">+{{ $row['carry_over'] }} carried</span>
+            @endif
         @elseif($row['type'] === 'make_up')
             <span class="rt-badge extra">make-up</span>
+            @if(! is_null($row['credits_total'] ?? null))
+                <span class="rt-badge credits" title="The carried pool this make-up draws from — one credit is used on save">pool {{ (int) ($row['credits_used'] ?? 0) }}/{{ (int) $row['credits_total'] }}</span>
+            @endif
         @else
             <span class="rt-badge walkin">walk-in · RM{{ number_format(($row['fee_sen'] ?? 0) / 100, 2) }}</span>
         @endif
@@ -70,6 +87,9 @@
                         </div>
                     @endforeach
                 </div>
+                @if($absent && $scored > 0)
+                    <div class="rt-warn">Scores stay on screen but are not saved while marked {{ $row['status'] }}.</div>
+                @endif
             @endif
 
             <textarea class="rt-note" wire:model.live.debounce.500ms="roster.{{ $key }}.note" placeholder="Note (optional)"></textarea>

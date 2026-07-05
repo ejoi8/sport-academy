@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\EnrollmentStatus;
+use App\Filament\Pages\RunTraining;
 use App\Filament\Widgets\AdminStatsWidget;
 use App\Filament\Widgets\CoachScoreTrendWidget;
 use App\Filament\Widgets\CoachStatsWidget;
@@ -73,6 +74,14 @@ it('queries and renders every table widget', function () {
                 ->where('is_open', true)
                 ->count()
         );
+});
+
+it('deep-links each timeslot row into Run Training at its nearest occurrence', function () {
+    Livewire::test(CoachTimeslotsWidget::class)->assertOk();
+
+    $url = RunTraining::getUrl(['date' => '2026-01-01', 'session' => 5]);
+
+    expect($url)->toContain('date=2026-01-01')->toContain('session=5');
 });
 
 it('gates each widget to the right roles', function () {

@@ -12,6 +12,7 @@ use App\Models\TrainingSession;
 use App\Models\User;
 use Database\Seeders\BaselineSeeder;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
@@ -223,6 +224,25 @@ it('defaults each student to the head coach and persists a per-student coach cha
     ]);
 });
 
+it("keeps the recorded session's coach when the slot default changes", function () {
+    [$coach, $offering, , , $date] = runTrainingContext();
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
+        ->call('save');
+
+    $newDefault = User::factory()->create(['name' => 'New Default Coach']);
+    $offering->update(['default_coach_id' => $newDefault->id]);
+
+    // Re-opening the saved session must still show the coach who actually led it, not the
+    // slot's new default.
+    Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
+        ->assertSet('headCoachId', $coach->id);
+});
+
 it('bulk-assigns every player to one coach', function () {
     [, $offering, , $key, $date] = runTrainingContext();
 
@@ -252,6 +272,40 @@ it('adds a coach on the fly who becomes assignable', function () {
         ->assertSet('addingCoach', false);
 
     $this->assertDatabaseHas('users', ['name' => 'Coach Fresh']);
+});
+
+it('surfaces a session recorded on an off-schedule date', function () {
+    [, $offering, , $key] = runTrainingContext();
+
+    // A Thursday has no scheduled timeslot (BaselineSeeder has Wed + Sat only) — a legacy
+    // off-schedule recording on this date must still surface, not become unreachable.
+    $thursday = Carbon::parse($offering->period.'-01')->startOfMonth();
+    while ($thursday->dayOfWeekIso !== 4) {
+        $thursday->addDay();
+    }
+
+    $session = TrainingSession::create([
+        'offering_id' => $offering->id,
+        'session_date' => $thursday->toDateString(),
+        'coach_id' => $offering->default_coach_id,
+    ]);
+
+    Attendance::create([
+        'training_session_id' => $session->id,
+        'student_id' => (int) substr($key, 1),
+        'enrollment_id' => null,
+        'participant_type' => 'enrolled',
+        'status' => 'present',
+    ]);
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $thursday->toDateString());
+
+    expect(collect($component->instance()->sessionsOnDate)->pluck('id'))->toContain($offering->id);
+
+    // It's the only session on that date, so it auto-expands, already marked as saved.
+    $component->assertSet('offeringId', $offering->id)
+        ->assertSet('savedSessionExists', true);
 });
 
 it('runs a new session on an off-schedule date by choosing a program and time', function () {
@@ -295,8 +349,7 @@ it('can add a new session on a date that already has a timeslot', function () {
 
     Livewire::test(RunTraining::class)
         ->set('date', $date)
-        ->call('toggleSession', $offering->id)  // a class is already selected...
-        ->assertSet('offeringId', $offering->id)
+        ->assertSet('offeringId', $offering->id) // the day's lone class auto-expands...
         ->call('toggleNewSession')                   // ...yet a fresh session is still reachable
         ->assertSet('creatingSession', true)
         ->set('adHocProgramId', $program->id)
@@ -426,14 +479,38 @@ it('lists the sessions on a date and expands one to record', function () {
     // The day's sessions are listed as cards...
     expect(collect($component->instance()->sessionsOnDate)->pluck('id'))->toContain($offering->id);
 
-    // ...expanding one loads its enrolled roster...
+    // ...and, being the only session that day, it auto-expands with its enrolled roster loaded.
+    $component->assertSet('offeringId', $offering->id)
+        ->assertSet('roster.'.$key.'.type', 'enrolled');
+
+    // Toggling it collapses it...
+    $component->call('toggleSession', $offering->id)
+        ->assertSet('offeringId', null);
+
+    // ...and toggling it again re-opens it.
     $component->call('toggleSession', $offering->id)
         ->assertSet('offeringId', $offering->id)
         ->assertSet('roster.'.$key.'.type', 'enrolled');
+});
 
-    // ...and toggling it again collapses it.
-    $component->call('toggleSession', $offering->id)
-        ->assertSet('offeringId', null);
+it('auto-expands the only session on a date', function () {
+    [, $offering, , , $date] = runTrainingContext(); // group runs on this date, alone
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->assertSet('offeringId', $offering->id);
+});
+
+it('still lists a class closed for registration', function () {
+    [, $offering, , , $date] = runTrainingContext();
+
+    $offering->update(['is_open' => false]);
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $date);
+
+    // is_open gates new registrations, not whether the class can still be delivered/recorded.
+    expect(collect($component->instance()->sessionsOnDate)->pluck('id'))->toContain($offering->id);
 });
 
 it('persists and re-hydrates a per-student note', function () {
@@ -479,10 +556,262 @@ it('does not create a session when the roster is empty', function () {
     expect(TrainingSession::where('offering_id', $empty->id)->count())->toBe(0);
 });
 
+it('shows carry-over credits from another enrolment', function () {
+    [, $offering, , $key, $date] = runTrainingContext();
+
+    $studentId = (int) substr($key, 1);
+    $otherOffering = Offering::where('id', '!=', $offering->id)->firstOrFail();
+
+    Enrollment::create([
+        'student_id' => $studentId,
+        'offering_id' => $otherOffering->id,
+        'status' => 'active',
+        'price_sen' => 28000,
+        'sessions_included' => 4,
+    ]);
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
+        ->assertSet('roster.'.$key.'.carry_over', 4);
+});
+
+it('refreshes credit counters and reports over-delivery on save', function () {
+    [, $offering, , $key, $date] = runTrainingContext();
+
+    $studentId = (int) substr($key, 1);
+    $enrollment = Enrollment::where('offering_id', $offering->id)->where('student_id', $studentId)->firstOrFail();
+    $enrollment->update(['sessions_included' => 1]);
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $date)
+        ->set('offeringId', $offering->id)
+        ->call('save')
+        ->assertSet('roster.'.$key.'.credits_used', 1);
+
+    // The next week's occurrence of the same recurring class — a second, separate session.
+    $nextWeek = Carbon::parse($date)->addDays(7)->toDateString();
+
+    $component
+        ->set('date', $nextWeek)
+        ->set('offeringId', $offering->id)
+        ->call('save')
+        ->assertSet('roster.'.$key.'.credits_used', 2)
+        ->assertNotified(
+            Notification::make()->success()->title('Training session saved')->body('1 player is now over their paid sessions.'),
+        );
+
+    $enrollment->refresh();
+    expect($enrollment->creditsUsed())->toBe(2);
+});
+
+it('offers only a paying walk-in for a different-program session', function () {
+    [, $offering, , $key] = runTrainingContext(); // Group, with a fresh (live-credit) enrolment
+    $studentId = (int) substr($key, 1);
+    $studentName = Student::findOrFail($studentId)->name;
+
+    // A different program's offering — same seeder, no shared credits.
+    $oneToOne = Offering::where('id', '!=', $offering->id)->firstOrFail();
+    expect($oneToOne->program_id)->not->toBe($offering->program_id);
+
+    $saturday = Carbon::parse($oneToOne->period.'-01')->startOfMonth();
+    while ($saturday->dayOfWeekIso !== $oneToOne->weekday) {
+        $saturday->addDay();
+    }
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $saturday->toDateString())
+        ->set('offeringId', $oneToOne->id)
+        ->call('startAdd')
+        ->set('search', $studentName);
+
+    $result = collect($component->instance()->results)->firstWhere('id', $studentId);
+    expect($result['type'])->toBe('walk_in');
+
+    // Nothing blocks the add even though this student has no credits for THIS program.
+    $component->call('addExisting', $studentId)
+        ->assertSet('roster.s'.$studentId.'.type', 'walk_in')
+        ->assertSet('roster.s'.$studentId.'.fee_sen', $oneToOne->program->walk_in_fee_sen)
+        ->call('save');
+
+    $this->assertDatabaseHas('attendances', [
+        'student_id' => $studentId,
+        'participant_type' => 'walk_in',
+        'enrollment_id' => null,
+        'walk_in_fee_sen' => $oneToOne->program->walk_in_fee_sen,
+    ]);
+});
+
+it('still offers a same-program make-up', function () {
+    [, $offering, , $key] = runTrainingContext(); // Group, with a fresh (live-credit) enrolment
+    $studentId = (int) substr($key, 1);
+    $studentName = Student::findOrFail($studentId)->name;
+    $groupEnrolmentId = Enrollment::where('offering_id', $offering->id)->where('student_id', $studentId)->value('id');
+
+    // A second Group offering — same program, different weekday/time, same period.
+    $secondGroup = Offering::create([
+        'program_id' => $offering->program_id,
+        'period' => $offering->period,
+        'schedule_type' => 'recurring',
+        'weekday' => 5, // Friday — different from the main Wed slot
+        'start_time' => '19:00',
+        'end_time' => '20:00',
+        'capacity' => 10,
+        'session_count' => 4,
+        'price_sen' => $offering->price_sen,
+        'is_open' => true,
+    ]);
+
+    $friday = Carbon::parse($secondGroup->period.'-01')->startOfMonth();
+    while ($friday->dayOfWeekIso !== $secondGroup->weekday) {
+        $friday->addDay();
+    }
+
+    $component = Livewire::test(RunTraining::class)
+        ->set('date', $friday->toDateString())
+        ->set('offeringId', $secondGroup->id)
+        ->call('startAdd')
+        ->set('search', $studentName);
+
+    $result = collect($component->instance()->results)->firstWhere('id', $studentId);
+    expect($result['type'])->toBe('make_up');
+
+    $component->call('addExisting', $studentId)
+        ->assertSet('roster.s'.$studentId.'.type', 'make_up')
+        ->call('save');
+
+    $this->assertDatabaseHas('attendances', [
+        'student_id' => $studentId,
+        'participant_type' => 'make_up',
+        'enrollment_id' => $groupEnrolmentId,
+    ]);
+});
+
+it('coach can force walk-in even when a make-up is available', function () {
+    [, $offering, , $key] = runTrainingContext(); // Group, with a fresh (live-credit) enrolment
+    $studentId = (int) substr($key, 1);
+    $studentName = Student::findOrFail($studentId)->name;
+
+    // Same setup as the same-program make-up case above.
+    $secondGroup = Offering::create([
+        'program_id' => $offering->program_id,
+        'period' => $offering->period,
+        'schedule_type' => 'recurring',
+        'weekday' => 5,
+        'start_time' => '19:00',
+        'end_time' => '20:00',
+        'capacity' => 10,
+        'session_count' => 4,
+        'price_sen' => $offering->price_sen,
+        'is_open' => true,
+    ]);
+
+    $friday = Carbon::parse($secondGroup->period.'-01')->startOfMonth();
+    while ($friday->dayOfWeekIso !== $secondGroup->weekday) {
+        $friday->addDay();
+    }
+
+    Livewire::test(RunTraining::class)
+        ->set('date', $friday->toDateString())
+        ->set('offeringId', $secondGroup->id)
+        ->call('startAdd')
+        ->set('search', $studentName)
+        ->call('addExisting', $studentId, true) // the escape hatch: force a walk-in
+        ->assertSet('roster.s'.$studentId.'.type', 'walk_in')
+        ->assertSet('roster.s'.$studentId.'.fee_sen', $secondGroup->program->walk_in_fee_sen)
+        ->call('save');
+
+    $this->assertDatabaseHas('attendances', [
+        'student_id' => $studentId,
+        'participant_type' => 'walk_in',
+        'enrollment_id' => null,
+        'walk_in_fee_sen' => $secondGroup->program->walk_in_fee_sen,
+    ]);
+});
+
 it('renders the Run Training panel page for an authenticated coach', function () {
     [$coach] = runTrainingContext();
 
     $this->actingAs($coach)
         ->get('/app/run-training')
+        ->assertOk()
+        ->assertSee('How credits work');
+});
+
+it('deep-links a date and session from the query string', function () {
+    [, $offering, , $key, $date] = runTrainingContext();
+
+    Livewire::withQueryParams(['date' => $date, 'session' => $offering->id])
+        ->test(RunTraining::class)
+        ->assertSet('date', $date)
+        ->assertSet('offeringId', $offering->id)
+        ->assertSet('roster.'.$key.'.type', 'enrolled');
+});
+
+it('drops a query-string session that does not run on the date', function () {
+    [, $offering] = runTrainingContext();
+
+    // A Thursday has no scheduled timeslot (BaselineSeeder has Wed + Sat only) — a `session` id
+    // that does not actually run there must be silently dropped, not force-opened.
+    $thursday = Carbon::parse($offering->period.'-01')->startOfMonth();
+    while ($thursday->dayOfWeekIso !== 4) {
+        $thursday->addDay();
+    }
+
+    Livewire::withQueryParams(['date' => $thursday->toDateString(), 'session' => $offering->id])
+        ->test(RunTraining::class)
+        ->assertSet('offeringId', null);
+});
+
+it('falls back to today for an unparseable date', function () {
+    runTrainingContext();
+
+    Livewire::withQueryParams(['date' => 'banana'])
+        ->test(RunTraining::class)
+        ->assertSet('date', today()->toDateString())
         ->assertOk();
+});
+
+it('lets a URL session take precedence over lone-session auto-expand', function () {
+    [, $offering, , , $date] = runTrainingContext(); // group runs alone on this date
+
+    // A second same-day, same-period offering at a different time — so the day no longer has
+    // exactly one session and auto-expand would not fire.
+    $second = Offering::create([
+        'program_id' => $offering->program_id,
+        'period' => $offering->period,
+        'schedule_type' => 'recurring',
+        'weekday' => $offering->weekday,
+        'start_time' => '21:00',
+        'end_time' => '22:00',
+        'capacity' => 10,
+        'session_count' => 4,
+        'price_sen' => $offering->price_sen,
+        'is_open' => true,
+    ]);
+
+    Livewire::withQueryParams(['date' => $date, 'session' => $second->id])
+        ->test(RunTraining::class)
+        ->assertSet('offeringId', $second->id);
+});
+
+it("returns an offering's nearest occurrence", function () {
+    [, $offering] = runTrainingContext();
+
+    $nearest = $offering->nearestOccurrence();
+    expect($nearest)->not->toBeNull()
+        ->and($nearest->dayOfWeekIso)->toBe($offering->weekday);
+
+    $oneOff = Offering::create([
+        'program_id' => $offering->program_id,
+        'period' => $offering->period,
+        'schedule_type' => 'one_off',
+        'specific_date' => '2026-03-15',
+        'start_time' => '18:00',
+        'capacity' => 10,
+        'price_sen' => $offering->price_sen,
+        'is_open' => true,
+    ]);
+
+    expect($oneOff->nearestOccurrence()->toDateString())->toBe('2026-03-15');
 });

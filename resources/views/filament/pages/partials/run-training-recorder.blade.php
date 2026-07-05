@@ -54,12 +54,24 @@
 
 @php($enrolled = collect($roster)->filter(fn ($r) => $r['type'] === 'enrolled'))
 @php($extras = collect($roster)->reject(fn ($r) => $r['type'] === 'enrolled'))
+@php($filter = trim($rosterFilter))
+@php($visibleEnrolled = $filter === '' ? $enrolled : $enrolled->filter(fn ($r) => stripos($r['name'], $filter) !== false || stripos((string) ($r['ic'] ?? ''), $filter) !== false))
+
+@if($enrolled->count() > 10)
+    <div class="rt-field">
+        <input type="text" wire:model.live.debounce.250ms="rosterFilter" placeholder="Filter players — name or IC">
+        @if($filter !== '')
+            <span class="rt-muted">showing {{ $visibleEnrolled->count() }} of {{ $enrolled->count() }}</span>
+            <button type="button" class="rt-linkbtn muted" wire:click="$set('rosterFilter', '')">Clear</button>
+        @endif
+    </div>
+@endif
 
 <div class="rt-list">
-    @forelse($enrolled as $key => $row)
+    @forelse($visibleEnrolled as $key => $row)
         @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'skills' => $skills, 'coachOptions' => $coachOptions, 'removable' => false])
     @empty
-        <div class="rt-muted">{{ $creatingSession ? 'New session — add who attended below.' : 'No players enrolled for this session yet.' }}</div>
+        <div class="rt-muted">{{ $filter !== '' ? 'No players match "'.$filter.'"' : ($creatingSession ? 'New session — add who attended below.' : 'No players enrolled for this session yet.') }}</div>
     @endforelse
 </div>
 
@@ -80,8 +92,14 @@
                             <strong>{{ $r['name'] }}</strong>
                             <span class="rt-muted">· IC {{ $r['ic'] ?? '—' }} · age {{ $r['age'] ?? '—' }} · {{ $r['program'] ?? 'not enrolled' }}</span>
                         </span>
-                        <span class="rt-tag">{{ $r['type'] === 'make_up' ? 'Make-up · no fee' : 'Walk-in · RM'.number_format(($r['fee_sen'] ?? 0) / 100, 2) }}</span>
+                        <span class="rt-tag">{{ $r['type'] === 'make_up' ? 'Make-up · no fee · uses '.($r['program'] ?? 'carried credit').' · '.($r['credits_left'] ?? 0).' left' : 'Walk-in · RM'.number_format(($r['fee_sen'] ?? 0) / 100, 2) }}</span>
+                        @if($r['type'] === 'make_up' && ($r['payment_status'] ?? null) && $r['payment_status'] !== 'active')
+                            <span class="rt-badge pay-{{ $r['payment_status'] }}">{{ $r['payment_status'] }}</span>
+                        @endif
                         <button type="button" class="rt-btn" wire:click="addExisting({{ $r['id'] }})">Add</button>
+                        @if($r['type'] === 'make_up')
+                            <button type="button" class="rt-btn ghost" wire:click="addExisting({{ $r['id'] }}, true)" title="Charge the walk-in fee instead of using their credit">Walk-in instead</button>
+                        @endif
                     </div>
                 @empty
                     <div class="rt-muted">{{ mb_strlen(trim($search)) < 2 ? 'Type a name or IC to search…' : 'No matches.' }}</div>
@@ -123,9 +141,11 @@
         <button type="button" class="rt-btn ghost" wire:click="discard"
             wire:confirm="Discard your unsaved changes?">Discard</button>
     @endif
+    <span class="rt-muted" wire:loading wire:target="save">Saving…</span>
     <button type="button" class="rt-save"
         @if($creatingSession && $this->overlappingTimeslots && count($roster))
             wire:confirm="A session already runs at that time on this date ({{ implode(', ', $this->overlappingTimeslots) }}). Create a second, separate session anyway?"
         @endif
+        wire:loading.attr="disabled" wire:target="save"
         wire:click="save">Save session</button>
 </div>

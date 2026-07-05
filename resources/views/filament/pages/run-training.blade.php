@@ -24,6 +24,9 @@
         .rt-item.done .rt-row { background:var(--rt-accent-soft); }
         .rt-item.excused { border-left:4px solid var(--rt-border); }
         .rt-item.excused .rt-row { opacity:.6; }
+        .rt-item.overlimit { border-left:4px solid var(--rt-danger); }
+        .rt-overnote { color:#b91c1c; font-weight:600; }
+        .dark .rt-overnote { color:#fecaca; }
         .rt-done { color:var(--rt-accent); font-weight:700; }
         .rt-row { display:flex; align-items:center; gap:.75rem; padding:.7rem 1rem; cursor:pointer; }
         .rt-row:focus-visible { outline:2px solid var(--rt-accent); outline-offset:-2px; }
@@ -37,12 +40,16 @@
         .rt-badge.pay-overdue { background:#fee2e2; color:#b91c1c; }
         .rt-badge.credits { background:var(--rt-soft); color:var(--rt-muted); border:1px solid var(--rt-border); }
         .rt-badge.credits.over { background:#fee2e2; color:#b91c1c; border-color:transparent; }
+        .rt-badge.credits.full { background:#fef3c7; color:var(--rt-warn); border-color:transparent; }
         .rt-badge.extra { background:#e0e7ff; color:#4338ca; }
         .rt-badge.walkin { background:#e0e7ff; color:#4338ca; }
+        .rt-badge.carry { background:#fef3c7; color:var(--rt-warn); }
         .dark .rt-badge.pay-pending { background:#422006; }
         .dark .rt-badge.pay-overdue { background:#450a0a; color:#fecaca; }
         .dark .rt-badge.credits.over { background:#450a0a; color:#fecaca; }
+        .dark .rt-badge.credits.full { background:#422006; }
         .dark .rt-badge.extra, .dark .rt-badge.walkin { background:#312e81; color:#c7d2fe; }
+        .dark .rt-badge.carry { background:#422006; }
         .rt-rowmeta { font-size:.73rem; color:var(--rt-muted); white-space:nowrap; }
         .rt-remove { border:0; background:transparent; color:var(--rt-muted); cursor:pointer; font-size:1rem; line-height:1; padding:.25rem; }
         .rt-card { padding:1rem; border-top:1px dashed var(--rt-border); background:var(--rt-soft); display:flex; flex-direction:column; gap:1rem; }
@@ -112,21 +119,81 @@
         .rt-linkbtn { border:0; background:transparent; color:var(--rt-accent); font-weight:600; font-size:.8rem; cursor:pointer; padding:0; }
         .rt-linkbtn.muted { color:var(--rt-muted); }
         .rt-linkbtn:disabled { opacity:.4; cursor:not-allowed; }
+        .rt-sc-head:focus-visible { outline:2px solid var(--rt-accent); outline-offset:-2px; border-radius:12px; }
+        [x-cloak] { display:none; }
+        .rt-help-btn { font-size:.72rem; padding:.3rem .6rem; }
+        .rt-help-overlay { position:fixed; inset:0; background:rgba(15,23,42,.5); display:flex; align-items:center; justify-content:center; z-index:100; padding:1.5rem; }
+        .rt-help-card { background:var(--rt-bg); border:1px solid var(--rt-border); border-radius:14px; max-width:34rem; width:100%; max-height:80vh; overflow-y:auto; padding:1.25rem 1.5rem; box-shadow:0 20px 40px rgba(0,0,0,.25); position:relative; }
+        .rt-help-close { position:absolute; top:.75rem; right:.75rem; border:0; background:transparent; color:var(--rt-muted); font-size:1.1rem; line-height:1; cursor:pointer; padding:.3rem; }
+        .rt-help-title { font-size:1.05rem; font-weight:700; margin:0 0 .75rem; padding-right:1.5rem; }
+        .rt-help-section { margin-top:1.1rem; }
+        .rt-help-section h4 { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--rt-muted); font-weight:700; margin:0 0 .5rem; }
+        .rt-help-rules { margin:0; padding-left:1.1rem; display:flex; flex-direction:column; gap:.35rem; font-size:.83rem; }
+        .rt-help-steps { margin:0; padding-left:1.1rem; display:flex; flex-direction:column; gap:.3rem; font-size:.83rem; }
+        .rt-help-badges { display:flex; flex-direction:column; gap:.5rem; }
+        .rt-help-badgerow { display:flex; align-items:center; gap:.6rem; font-size:.8rem; }
+        .rt-help-badgerow .rt-badge, .rt-help-badgerow .rt-tag { flex-shrink:0; }
+        .rt-help-foot { margin-top:1.1rem; font-size:.8rem; color:var(--rt-muted); border-top:1px dashed var(--rt-border); padding-top:.75rem; }
+        .dark .rt-help-overlay { background:rgba(0,0,0,.65); }
+        .dark .rt-help-card { box-shadow:0 20px 40px rgba(0,0,0,.5); }
     </style>
 
-    <div class="rt">
+    <div class="rt" x-data="{ creditsHelp: false }" @keydown.escape.window="creditsHelp = false">
         @php($sessions = $this->sessionsOnDate)
         <div class="rt-head">
             <label class="rt-fieldgroup">
                 <span class="rt-fieldlabel">Date</span>
                 <div class="rt-datenav">
-                    <input type="date" wire:model.live="date" @disabled($dirty)>
+                    <input type="date" wire:model.live="date" @disabled($dirty) @if($dirty) title="Save or discard your changes first" @endif>
                     <span class="rt-weekday">{{ $date ? \Illuminate\Support\Carbon::parse($date)->format('D') : '' }}</span>
-                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($dirty)>Today</button>
+                    <button type="button" class="rt-btn ghost" wire:click="goToday" @disabled($dirty) @if($dirty) title="Save or discard your changes first" @endif>Today</button>
                 </div>
             </label>
             <div class="rt-summary">
                 <span>{{ count($sessions) }} session{{ count($sessions) === 1 ? '' : 's' }}@if(count($sessions)) · {{ collect($sessions)->where('recorded', true)->count() }} recorded @endif</span>
+                <button type="button" class="rt-btn ghost rt-help-btn" @click="creditsHelp = true">? How credits work</button>
+            </div>
+        </div>
+
+        <div class="rt-help-overlay" x-cloak x-show="creditsHelp" @click.self="creditsHelp = false" role="dialog" aria-modal="true" aria-label="How session credits work">
+            <div class="rt-help-card">
+                <button type="button" class="rt-help-close" @click="creditsHelp = false" aria-label="Close">✕</button>
+                <h3 class="rt-help-title">How session credits work</h3>
+
+                <div class="rt-help-section">
+                    <h4>The five rules</h4>
+                    <ol class="rt-help-rules">
+                        <li>Each month's registration buys N sessions ("credits" — usually 4).</li>
+                        <li>Attending your own weekly class uses this month's credit — present, late and absent all use one (the spot was held); excused does not.</li>
+                        <li>Unused credits never disappear — they become "carried" credits.</li>
+                        <li>Carried credits are spent by joining an extra session in the same program (any day, same class/program): free as a make-up, oldest credits first — with no matching-program credits left, they pay the walk-in fee.</li>
+                        <li>Regular monthly sessions never touch carried credits — this month's fee covers this month's classes.</li>
+                    </ol>
+                </div>
+
+                <div class="rt-help-section">
+                    <h4>Worked example — Adam</h4>
+                    <ol class="rt-help-steps">
+                        <li>June: pays for 4, attends 2 → 2 credits carried.</li>
+                        <li>July: pays for 4 again — every Saturday uses a July credit, June leftovers untouched.</li>
+                        <li>One Wednesday he joins another Group Training slot as an extra → free make-up, uses 1 June credit (a Goalkeeper session instead would have been a walk-in — his carried credits are Group Training credits).</li>
+                        <li>After 4 Saturdays: <span class="rt-badge credits full">4/4 · paid up</span> — a 5th shows <span class="rt-badge credits over">+1 over</span>, allowed but renewal is due.</li>
+                    </ol>
+                </div>
+
+                <div class="rt-help-section">
+                    <h4>Badge cheat-sheet</h4>
+                    <div class="rt-help-badges">
+                        <div class="rt-help-badgerow"><span class="rt-badge credits">2/4</span> <span>in progress — 2 of 4 paid sessions used.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge credits full">4/4 · paid up</span> <span>all paid sessions used — renewal due soon.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge credits over">5/4 · +1 over</span> <span>over-delivered — never blocked, just flagged.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge carry">+2 carried</span> <span>unused past sessions — usable as free make-ups.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge extra">make-up</span> <span>extra session paid by a carried credit.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge walkin">walk-in · RM40</span> <span>extra session, no credits left — pays the fee.</span></div>
+                    </div>
+                </div>
+
+                <div class="rt-help-foot">Credits belong to the program they were bought for — no credits for that program means the walk-in fee. Nothing is ever blocked; over-limit sessions are simply flagged for renewal.</div>
             </div>
         </div>
 
@@ -135,12 +202,15 @@
 
             @forelse($sessions as $s)
                 @php($isOpen = $offeringId === $s['id'] && ! $creatingSession)
-                <div class="rt-sc @if($isOpen) open @elseif($dirty) locked @endif">
-                    <div class="rt-sc-head" wire:click="toggleSession({{ $s['id'] }})">
+                <div class="rt-sc @if($isOpen) open @elseif($dirty) locked @endif" @if(! $isOpen && $dirty) title="Save or discard your changes first" @endif>
+                    <div class="rt-sc-head" role="button" tabindex="0" aria-expanded="{{ $isOpen ? 'true' : 'false' }}"
+                        wire:click="toggleSession({{ $s['id'] }})"
+                        wire:keydown.enter="toggleSession({{ $s['id'] }})"
+                        wire:keydown.space.prevent="toggleSession({{ $s['id'] }})">
                         <span class="rt-sc-chev">▸</span>
                         <span class="rt-sc-title">{{ $s['program'] }} <span class="rt-sc-time">· {{ $s['time'] }}</span></span>
                         <span class="rt-sc-spacer"></span>
-                        <span class="rt-sc-meta">{{ $s['enrolled'] }} enrolled</span>
+                        <span class="rt-sc-meta">@if($s['coach']){{ $s['coach'] }} · @endif{{ $s['recorded'] ? $s['attended'].' attended' : $s['enrolled'].' enrolled' }}</span>
                         @if($s['recorded'])
                             <span class="rt-status saved"><span class="led"></span>Saved</span>
                         @else
@@ -157,8 +227,11 @@
                 <div class="rt-callout">No sessions scheduled on this day.</div>
             @endforelse
 
-            <div class="rt-sc new @if($creatingSession) open @elseif($dirty) locked @endif">
-                <div class="rt-sc-head" wire:click="toggleNewSession">
+            <div class="rt-sc new @if($creatingSession) open @elseif($dirty) locked @endif" @if(! $creatingSession && $dirty) title="Save or discard your changes first" @endif>
+                <div class="rt-sc-head" role="button" tabindex="0" aria-expanded="{{ $creatingSession ? 'true' : 'false' }}"
+                    wire:click="toggleNewSession"
+                    wire:keydown.enter="toggleNewSession"
+                    wire:keydown.space.prevent="toggleNewSession">
                     <span class="rt-sc-chev plus">＋</span>
                     <span>Create new session</span>
                     <span class="rt-sc-spacer"></span>

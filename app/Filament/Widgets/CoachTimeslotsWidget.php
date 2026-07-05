@@ -45,11 +45,22 @@ class CoachTimeslotsWidget extends TableWidget
                     ->badge()
                     ->formatStateUsing(fn ($state, Offering $record) => $state.' / '.$record->capacity),
             ])
+            // Deep-link straight into the timeslot's nearest session, so the coach lands on an
+            // already-open card instead of the bare "pick a date" screen. No URL when the
+            // timeslot's next occurrence can't be determined (e.g. no weekday set).
+            ->recordUrl(fn (Offering $record) => static::runTrainingUrl($record))
             ->recordActions([
                 Action::make('run')
                     ->label('Run Training')
                     ->icon('heroicon-m-clipboard-document-check')
-                    ->url(fn () => RunTraining::getUrl()),
+                    ->url(fn (Offering $record) => static::runTrainingUrl($record) ?? RunTraining::getUrl()),
             ]);
+    }
+
+    protected static function runTrainingUrl(Offering $record): ?string
+    {
+        $date = $record->nearestOccurrence();
+
+        return $date ? RunTraining::getUrl(['date' => $date->toDateString(), 'session' => $record->id]) : null;
     }
 }
