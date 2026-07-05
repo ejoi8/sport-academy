@@ -44,6 +44,10 @@ class EnrollmentForm
                     ->prefix('RM')
                     ->minValue(0)
                     ->default(0)
+                    ->disabled(fn ($record): bool => $record?->snapshotsLocked() ?? false)
+                    ->helperText(fn ($record): ?string => $record?->snapshotsLocked()
+                        ? 'Locked — sessions have been recorded against this enrolment. Adjust by cancelling and creating a new enrolment, or record the deal offline.'
+                        : null)
                     ->required()
                     ->formatStateUsing(fn (?int $state): string => number_format(($state ?? 0) / 100, 2, '.', ''))
                     ->dehydrateStateUsing(fn (?string $state): int => (int) round(((float) $state) * 100)),
@@ -52,6 +56,10 @@ class EnrollmentForm
                     ->numeric()
                     ->minValue(0)
                     ->default(4)
+                    ->disabled(fn ($record): bool => $record?->snapshotsLocked() ?? false)
+                    ->helperText(fn ($record): ?string => $record?->snapshotsLocked()
+                        ? 'Locked — sessions have been recorded against this enrolment. Adjust by cancelling and creating a new enrolment, or record the deal offline.'
+                        : null)
                     ->required(),
                 DatePicker::make('credits_expire_at')
                     ->label('Credits expire on')

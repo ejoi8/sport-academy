@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Enrollments;
 use App\Filament\Resources\Enrollments\Pages\CreateEnrollment;
 use App\Filament\Resources\Enrollments\Pages\EditEnrollment;
 use App\Filament\Resources\Enrollments\Pages\ListEnrollments;
+use App\Filament\Resources\Enrollments\RelationManagers\ActivitiesRelationManager;
 use App\Filament\Resources\Enrollments\Schemas\EnrollmentForm;
 use App\Filament\Resources\Enrollments\Tables\EnrollmentsTable;
 use App\Models\Enrollment;
@@ -41,7 +42,7 @@ class EnrollmentResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ActivitiesRelationManager::class,
         ];
     }
 

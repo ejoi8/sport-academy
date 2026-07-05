@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Students\Pages;
 
 use App\Filament\Resources\Students\StudentResource;
+use App\Models\Student;
+use App\Support\DeletionGuard;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -15,8 +17,18 @@ class EditStudent extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
-            ForceDeleteAction::make(),
+            DeleteAction::make()
+                ->before(function (DeleteAction $action, Student $record): void {
+                    if ($message = $record->deletionBlockedReason()) {
+                        DeletionGuard::halt($action, $message);
+                    }
+                }),
+            ForceDeleteAction::make()
+                ->before(function (ForceDeleteAction $action, Student $record): void {
+                    if ($message = $record->deletionBlockedReason()) {
+                        DeletionGuard::halt($action, $message);
+                    }
+                }),
             RestoreAction::make(),
         ];
     }

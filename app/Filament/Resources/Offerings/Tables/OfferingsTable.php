@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Offerings\Tables;
 
 use App\Filament\Resources\Offerings\OfferingResource;
 use App\Models\Offering;
+use App\Support\DeletionGuard;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -71,7 +72,12 @@ class OfferingsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     self::cloneToMonthAction(),
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function (DeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
                 ]),
             ]);
     }

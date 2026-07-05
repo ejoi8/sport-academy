@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Students\Tables;
 
 use App\Enums\Gender;
 use App\Models\Student;
+use App\Support\DeletionGuard;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -17,6 +18,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 
 class StudentsTable
 {
@@ -67,8 +69,18 @@ class StudentsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function (DeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
+                    ForceDeleteBulkAction::make()
+                        ->before(function (ForceDeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
                     RestoreBulkAction::make(),
                 ]),
             ]);

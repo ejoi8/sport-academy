@@ -6,6 +6,7 @@ use App\Enums\AttendanceStatus;
 use App\Enums\EnrollmentStatus;
 use App\Filament\Resources\Offerings\OfferingResource;
 use App\Models\Enrollment;
+use App\Support\DeletionGuard;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -20,6 +21,7 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class EnrollmentsTable
 {
@@ -47,6 +49,13 @@ class EnrollmentsTable
                         : '—'),
                 TextColumn::make('status')
                     ->badge(),
+                TextColumn::make('source')
+                    ->badge()
+                    ->color(fn (string $state): string => $state === 'online' ? 'info' : 'gray'),
+                TextColumn::make('booking_reference')
+                    ->label('Reference')
+                    ->searchable()
+                    ->placeholder('—'),
                 TextColumn::make('price_sen')
                     ->label('Price')
                     ->money('MYR', divideBy: 100),
@@ -84,6 +93,11 @@ class EnrollmentsTable
                     ->label('Over-delivered (past paid sessions)')
                     ->query(fn (Builder $query): Builder => $query
                         ->whereRaw("(select count(*) from attendances where attendances.enrollment_id = enrollments.id and attendances.status in ({$consuming})) > sessions_included")),
+                Filter::make('pending_stale')
+                    ->label('Pending > 7 days')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('status', EnrollmentStatus::Pending->value)
+                        ->whereDate('created_at', '<=', now()->subDays(7)->toDateString())),
                 Filter::make('attended')
                     ->label('Sessions attended')
                     ->schema([
@@ -133,8 +147,18 @@ class EnrollmentsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function (DeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
+                    ForceDeleteBulkAction::make()
+                        ->before(function (ForceDeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
                     RestoreBulkAction::make(),
                 ]),
             ]);

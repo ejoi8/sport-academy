@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Offerings\RelationManagers;
 
 use App\Enums\EnrollmentStatus;
+use App\Models\Enrollment;
+use App\Support\DeletionGuard;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -14,6 +16,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 
 class EnrollmentsRelationManager extends RelationManager
 {
@@ -81,11 +84,21 @@ class EnrollmentsRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->before(function (DeleteAction $action, Enrollment $record): void {
+                        if ($message = $record->deletionBlockedReason()) {
+                            DeletionGuard::halt($action, $message);
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->before(function (DeleteBulkAction $action, Collection $records): void {
+                            if ($message = DeletionGuard::firstBlockedMessage($records)) {
+                                DeletionGuard::halt($action, $message);
+                            }
+                        }),
                 ]),
             ]);
     }
