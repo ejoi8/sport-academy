@@ -26,7 +26,7 @@ It points at an enrolment that **already exists** (created at registration via P
 | Roster type | `enrollment_id` | Fee |
 |---|---|---|
 | **Enrolled** | their enrolment **in this timeslot** | — |
-| **Make-up** | their live-credit enrolment **from another timeslot** (`Student::liveCreditEnrollment()`) | — |
+| **Make-up** | their live-credit enrolment **from another timeslot in the same program** (`Student::liveCreditEnrollment($programId)`) | — |
 | **Walk-in** | `null` | pays `walk_in_fee_sen` |
 
 ## Credits are *derived*, never stored

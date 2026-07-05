@@ -18,6 +18,8 @@
   for the recording screen.
 - [Design note — planned sessions](docs/design-planned-sessions.md) — a considered-and-declined
   direction, kept as a record (Part A shipped; B–D are not a backlog).
+- [Session credits — policy (SOP/TNC source)](docs/credits-policy.md) — the plain-English rules
+  for credits, carry-over, and make-ups that Run Training enforces automatically.
 
 ## About Laravel
 

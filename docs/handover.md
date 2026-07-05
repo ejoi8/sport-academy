@@ -41,10 +41,13 @@ php artisan db:seed --class="Database\Seeders\DemoSeeder" --force
 | `coach@academy.test` (Farid), `amir@…`, `lena@…` | coach + super_admin |
 | `parent1@demo.test` … `parent100@demo.test` | parent (no panel access) |
 
-Demo data: 4 programs — **1-on-1** (Wed 18:00), **Group Training** (Sat 09:00),
-**Goalkeeper** (Sun 09:00) recurring weekly, plus a one-off **Football Clinic** (2nd Saturday
-14:00) — 100 students each, in families of 4 under 100 parents. Last month fully recorded;
-this month recorded up to today.
+Demo data: 5 programs — **1-on-1** (Wed 18:00), **Group Training** (Sat 09:00),
+**Goalkeeper** (Sun 09:00) recurring weekly, a one-off **Football Clinic** (2nd Saturday
+14:00) — 100 students each, in families of 4 under 100 parents — plus a retired
+**Ramadhan Special** (inactive, last month only). Last month fully recorded; this month
+recorded up to today. A deterministic **scenario layer** (`SC …`-named students on the closed
+Sat 11:00 slot) covers every credit/attendance case — verify it with
+[demo-verification.sql](demo-verification.sql).
 
 ## Where things live
 
@@ -78,13 +81,20 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
   nothing). Soft time-overlap warning, never a block.
 - Deleting a saved one-off session also removes its now-empty one-off offering.
 - What Save writes, exactly: [run-training-save.md](run-training-save.md).
+- Page state is URL-addressable (`?date=YYYY-MM-DD&session=<offering id>`) — refresh-safe and
+  bookmarkable. Only `date` and the open session id go in the URL (never roster/search — student
+  names must never reach URLs or logs); unsaved edits are **not** preserved by the URL. Future
+  caveat: if sessions ever become coach-scoped, `mount()` must *authorise* the `session` param, not
+  just validate that it exists.
 
 ## Invariants — do not break these
 
 1. **Run Training is the only writer** of attendance, scores, and credit consumption. There is
    deliberately no Attendance/Score Filament resource.
 2. **Credits are derived, never stored** — `creditsUsed()` counts attendances
-   (present/late/absent consume; excused doesn't). No counter columns.
+   (present/late/absent consume; excused doesn't). No counter columns. Full
+   SOP/TNC-facing rules (carry-over, make-ups, over-delivery): see
+   [credits-policy.md](credits-policy.md).
 3. **Enrolment snapshots** — `price_sen` / `sessions_included` are copied from the offering at
    registration; later offering edits must not touch existing enrolments.
 4. **Money is integer sen** (`*_sen`); RM only at the display edge
@@ -102,6 +112,7 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
 | Payment gateway | **Deferred** to a late phase as an optional, decoupled add-on; `Enrollment.status` (active/pending/overdue) is the manual payment signal meanwhile. |
 | Run Training navigation | Iterated dropdown → date-first → session-first → **date + session accordion** (current). The accordion makes date/roster desync impossible by construction. |
 | Ad-hoc sessions | Create-on-**Save** (not on start) to avoid orphan one-off offerings. |
+| Cross-program make-ups | **Restricted** (2026-07-05) — make-up credits are same-program only (value mismatch: e.g. a Goalkeeper credit paying a 1-on-1 session); coach can always charge walk-in instead. See credits-policy.md |
 
 ## Deferred / known gaps
 
