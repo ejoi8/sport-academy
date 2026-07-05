@@ -49,6 +49,13 @@ class Student extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function deletionBlockedReason(): ?string
+    {
+        return $this->attendances()->exists()
+            ? 'This student has recorded sessions. Set them inactive instead.'
+            : null;
+    }
+
     public function getAgeAttribute(): ?int
     {
         return $this->dob?->age;
@@ -139,5 +146,14 @@ class Student extends Model
             ->groupBy('status')
             ->pluck('total', 'status')
             ->all();
+    }
+
+    public function carriedCreditsCount(): int
+    {
+        return (int) $this->enrollments()
+            ->whereIn('status', ['active', 'pending', 'overdue'])
+            ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
+            ->get()
+            ->sum(fn (Enrollment $enrollment): int => max(0, $enrollment->sessions_included - $enrollment->used_credits));
     }
 }

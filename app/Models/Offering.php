@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ScheduleType;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -58,9 +59,34 @@ class Offering extends Model
         return $this->hasMany(TrainingSession::class);
     }
 
+    public function scopePubliclyBookable(Builder $query): Builder
+    {
+        return $query
+            ->where('is_open', true)
+            ->where('capacity', '>', 0)
+            ->whereIn('period', [
+                now()->startOfMonth()->format('Y-m'),
+                now()->startOfMonth()->addMonth()->format('Y-m'),
+            ]);
+    }
+
+    public function deletionBlockedReason(): ?string
+    {
+        if ($this->enrollments()->exists() || $this->trainingSessions()->exists()) {
+            return 'This timeslot has enrolments or recorded sessions. Close registration instead.';
+        }
+
+        return null;
+    }
+
     public function label(): string
     {
         return trim(($this->program?->name ?? 'Program').' · '.$this->scheduleLabel());
+    }
+
+    public function monthLabel(): string
+    {
+        return Carbon::parse($this->period.'-01')->format('F Y');
     }
 
     public function scheduleLabel(): string
@@ -109,5 +135,22 @@ class Offering extends Model
         }
 
         return $occurrences->first(fn (Carbon $date): bool => $date->gte($today)) ?? $occurrences->last();
+    }
+
+    public function heldSeatsCount(): int
+    {
+        return (int) ($this->held_seats_count ?? $this->enrollments()
+            ->whereIn('status', ['active', 'pending'])
+            ->count());
+    }
+
+    public function seatsLeft(): int
+    {
+        return max(0, $this->capacity - $this->heldSeatsCount());
+    }
+
+    public function isFull(): bool
+    {
+        return $this->seatsLeft() <= 0;
     }
 }

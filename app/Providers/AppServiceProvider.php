@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Enrollment;
+use App\Observers\EnrollmentObserver;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -24,5 +26,7 @@ class AppServiceProvider extends ServiceProvider
         // Mirrors Shield's super-admin mechanism, keyed to our named 'Admin' role. Returning null
         // (not false) for everyone else lets normal policy/permission checks proceed.
         Gate::before(fn ($user, string $ability) => $user->hasRole('Admin') ? true : null);
+
+        Enrollment::observe(EnrollmentObserver::class);
     }
 }
