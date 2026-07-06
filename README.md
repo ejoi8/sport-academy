@@ -22,6 +22,8 @@
   for credits, carry-over, and make-ups that Run Training enforces automatically.
 - [Execution plan — next features](docs/plan-next-features.md) — self-contained build plan for
   enrolment guardrails, the parent booking funnel, and the payment gateway.
+- [Execution plan — Quick Record](docs/plan-quick-record.md) — student-first recording menu
+  (side-by-side comparison with Run Training) + coach-facing Student 360 page.
 
 ## About Laravel
 
