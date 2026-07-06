@@ -57,6 +57,12 @@ class BookingWizard extends Component
 
     public ?string $completedReference = null;
 
+    public ?int $completedEnrollmentId = null;
+
+    public bool $gatewayEnabled = false;
+
+    public ?string $selectedGateway = null;
+
     public function mount(Offering $offering): void
     {
         abort_unless(
@@ -66,6 +72,8 @@ class BookingWizard extends Component
 
         $offering->load('program');
         $this->offering = $offering;
+        $this->gatewayEnabled = PaymentInstructions::usesHostedGateway();
+        $this->selectedGateway = PaymentInstructions::defaultHostedGateway();
 
         if (Auth::check()) {
             $this->accountName = (string) Auth::user()->name;
@@ -197,6 +205,7 @@ class BookingWizard extends Component
         }
 
         $this->completedReference = $enrollment->booking_reference;
+        $this->completedEnrollmentId = $enrollment->id;
         $this->step = 4;
     }
 
@@ -269,6 +278,8 @@ class BookingWizard extends Component
         return view('livewire.public-site.booking-wizard', [
             'paymentInstructions' => PaymentInstructions::lines(),
             'existingStudents' => Auth::user()?->students()->where('is_active', true)->orderBy('name')->get() ?? collect(),
+            'gatewayEnabled' => $this->gatewayEnabled,
+            'gatewayOptions' => PaymentInstructions::hostedGatewayOptions(),
         ])->layout('layouts.public', [
             'title' => 'Book '.$this->offering->program->name,
         ]);

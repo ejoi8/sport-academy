@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Listeners\ActivateEnrollmentOnPayment;
 use App\Models\Enrollment;
 use App\Observers\EnrollmentObserver;
+use Ejoi\PaymentGateway\Laravel\Events\PaymentStatusChanged;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,5 +31,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(fn ($user, string $ability) => $user->hasRole('Admin') ? true : null);
 
         Enrollment::observe(EnrollmentObserver::class);
+        Event::listen(PaymentStatusChanged::class, ActivateEnrollmentOnPayment::class);
     }
 }

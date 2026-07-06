@@ -157,6 +157,32 @@ under three minutes without staff help; staff see the booking as a normal pendin
 
 # Phase 3 — Payment gateway (optional, decoupled)
 
+> **Status: largely built** (2026-07-05), via the local `ejoi/payment-gateway` package rather
+> than the bespoke design sketched below — the package already covers gateway abstraction,
+> persistence, webhook verify/dedupe, and the manual/proof flow, so this phase became
+> *integrating* it instead of building it from scratch. See docs/handover.md's "Payments"
+> section for the as-built flow. **What this pass added/fixed** on top of the existing
+> integration:
+> - Fixed a fatal on every gateway return (`ReturnController` called a Livewire-only `->layout()`
+>   method that doesn't exist on a plain controller's `View`) — every browser return was 500ing.
+> - Scheduled the package's `ReconcilePendingPayments` job (nothing did before — a missed webhook
+>   left payments pending forever) and added a "Check payment status again" link on the pending
+>   return state.
+> - Closed the double-payment window at checkout: a reuse ladder now reconciles/reuses an
+>   existing pending payment's checkout URL instead of minting a new bill on every "Pay now"
+>   click.
+> - Made amount-mismatch and duplicate-payment cases visible (`Log::warning` + an activity-log
+>   entry on the enrolment) instead of silently returning — previously an admin had no way to
+>   discover either without reading logs.
+> - Built the manual bank-transfer proof loop end to end: parent upload UI
+>   (`App\Livewire\PublicSite\ProofUpload`), admin Approve/Reject actions with a proof viewer on
+>   the Payments resource, and a reject-with-resubmission state shown back to the parent.
+> - Polished the Payments resource (explicit status badge colors — the package's `PaymentStatus`
+>   enum isn't Filament-aware) and documented the local-dev webhook limitation (gateways can't
+>   reach `localhost`; use a tunnel, or rely on the return-page/scheduled reconcile).
+>
+> Refunds remain out of scope (unchanged from the original plan below).
+
 **Goal:** the funnel's "how to pay" step gains a **Pay now (FPX)** button. The gateway is an
 optional add-on: with it disabled, Phase 2's manual-transfer flow keeps working unchanged.
 

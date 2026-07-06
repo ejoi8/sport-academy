@@ -87,6 +87,84 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
   caveat: if sessions ever become coach-scoped, `mount()` must *authorise* the `session` param, not
   just validate that it exists.
 
+## Payments
+
+A local path package, `ejoi/payment-gateway` (composer path repo, `dev-main`, at
+`../_packages/payment-gateway` relative to this repo — see `composer.json`'s `repositories`
+entry), provides gateway-agnostic hosted checkout + a manual bank-transfer flow. **Never modify
+the package** — app-side code only (`app/Http/Controllers/Payments/`, `app/Listeners/`,
+`app/Models/GatewayPayment.php`, `app/Support/PaymentInstructions.php`, `app/Livewire/PublicSite/
+ProofUpload.php`, `app/Filament/Resources/Payments/`, `config/payment-gateway.php`).
+
+**The flow, end to end:**
+
+1. **Checkout** — `POST /payments/enrollments/{enrollment}/checkout` (`CheckoutController`)
+   creates a payment with the chosen hosted gateway (Billplz/toyyibPay/CHIP/Stripe/PayPal — only
+   gateways with all required config keys filled show up as options,
+   `PaymentInstructions::hostedGatewayOptions()`) and redirects to its checkout page. A **reuse
+   ladder** avoids double-billing when "Pay now" is clicked more than once (stale tab, back
+   button): reload the latest payment for the booking; if pending with a gateway reference,
+   reconcile it first (it may already be paid); if now paid, send the parent to the return page
+   instead of billing again; if still pending on the **same** gateway with a checkout URL on
+   file, redirect back to that existing URL; only otherwise mint a new payment.
+2. **Hosted page** — the provider collects payment, then two things happen (either can win the
+   race):
+   - **Webhook** — the package's own route (`payment-gateway.webhook`, registered by its service
+     provider) verifies/requeries, dedupes by delivery, persists the transition, and fires
+     `Ejoi\PaymentGateway\Laravel\Events\PaymentStatusChanged`.
+   - **Return page** — `GET /payments/enrollments/{enrollment}/return` (`ReturnController`)
+     reconciles a still-pending payment (only when it has a `gateway_reference`) before
+     rendering, so a parent who lands back before the webhook arrives still sees the truth. The
+     pending state has a "Check payment status again" link (reloads, which reconciles again).
+3. **Activation** — `App\Listeners\ActivateEnrollmentOnPayment` (listens for
+   `PaymentStatusChanged`, registered in `AppServiceProvider::boot()`) is the **only** automated
+   enrolment-status change: on a paid event it activates the matching **pending** enrolment
+   **only when the amount matches exactly** (`(int)` cast both sides). Two things are flagged,
+   never silently swallowed, via `Log::warning()` **and** an activity-log entry
+   (`activity('enrolments')->performedOn($enrollment)->log(...)`, visible on the enrolment's own
+   activity trail): an **amount mismatch** (`'payment amount mismatch'`, not activated), and a
+   **duplicate payment** — a paid event for an enrolment that's already `Active`
+   (`'duplicate payment received'`, status left untouched). Both need manual admin review.
+4. **Reconcile safety net** — the package ships
+   `Ejoi\PaymentGateway\Laravel\Jobs\ReconcilePendingPayments` but doesn't schedule it;
+   `routes/console.php` schedules it every 5 minutes (`withoutOverlapping()`), gated by
+   `config('payment-gateway.reconcile.enabled')` (defaults true; an app-added config key, not a
+   package one). This is the backstop when a webhook is missed/delayed and the parent never
+   revisits the return page.
+5. **Manual proof loop** — when no hosted gateway is configured, or as a "Paid by bank transfer?
+   Upload your receipt" secondary option on My Family: `App\Livewire\PublicSite\ProofUpload`
+   (one instance per pending online enrolment) creates a `manual`-gateway payment row (no
+   provider API call — the package's manual driver just records pending) and calls
+   `Payments::attachProof()` with the uploaded file (jpg/png/pdf, max 4MB). Staff review on the
+   Payments resource (`app/Filament/Resources/Payments/Tables/PaymentsTable.php`): **Approve**
+   (`Payments::approve()` → paid → `PaymentStatusChanged` → the listener activates) or **Reject**
+   (`Payments::reject(..., reupload: true)` → stays pending, reason recorded in
+   `metadata.review.note`, so the parent's dashboard shows "Your previous receipt could not be
+   confirmed: …" and lets them upload again). A "View proof" action streams the file via
+   `GET /payments/proofs/{proof}` (`ProofDownloadController`, staff-only — the proof disk is
+   private by default, `config('payment-gateway.proofs.disk')`).
+6. **Admin surface** — `app/Filament/Resources/Payments/*` (nav group **Finance**): reference,
+   parent, child, program, amount (`->money('MYR', divideBy: 100)`), gateway/status badges
+   (colored explicitly — the package's `PaymentStatus` enum has no Filament `HasColor`, unlike
+   the app's own enums), paid-at, transaction id; filters by status/gateway; an "Enrolment" row
+   action opens the linked enrolment; a header "Record offline payment" action creates +
+   immediately approves a manual payment for any pending enrolment (the audited replacement for
+   an undocumented manual status flip).
+
+**Package gotcha (worked around, not patched):** `Ejoi\PaymentGateway\Laravel\Models\Payment`'s
+`proofs()`/`webhooks()` relations don't pin an explicit foreign key, so Eloquent's default guess
+(`Str::snake(class_basename($this)).'_id'`) resolves against whatever class is actually calling
+it — since `App\Models\GatewayPayment extends Payment`, calling `$gatewayPayment->proofs()`
+guessed `gateway_payment_id` instead of the real `payment_id` column. Fixed by overriding both
+relations on `GatewayPayment` with an explicit foreign key. If the package is ever updated to
+pin these itself, the overrides become harmless duplicates.
+
+**Local-dev reality:** none of the gateways can reach `localhost` for their webhook callback.
+For real webhook testing, tunnel your dev server over HTTPS (e.g. `expose` or `ngrok`) and point
+the gateway's dashboard at the tunnel URL. Without a tunnel, activation still happens — just via
+the return-page reconcile or the scheduled `ReconcilePendingPayments` job — so nothing is stuck
+waiting on a webhook that can never arrive in local dev.
+
 ## Invariants — do not break these
 
 1. **Run Training is the only writer** of attendance, scores, and credit consumption. There is

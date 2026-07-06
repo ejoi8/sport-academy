@@ -36,12 +36,45 @@
                                     <span class="rounded-full bg-white px-3 py-1">+{{ $enrollment->creditsRemaining() }} carried</span>
                                 @endif
                                 <span class="rounded-full bg-white px-3 py-1">RM{{ number_format($enrollment->price_sen / 100, 2) }}</span>
+                                @if ($enrollment->latestPayment)
+                                    <span class="rounded-full bg-white px-3 py-1">Payment: {{ ucfirst($enrollment->latestPayment->status->value) }}</span>
+                                @endif
                             </div>
 
                             @if ($enrollment->status->value === 'pending')
                                 <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                                     {{ \App\Support\PaymentInstructions::summary() }}
                                 </div>
+                                @if ($gatewayEnabled && $enrollment->source === 'online')
+                                    <form method="POST" action="{{ route('payments.checkout', $enrollment) }}" class="mt-3 space-y-3">
+                                        @csrf
+                                        <div>
+                                            <label for="gateway-{{ $enrollment->id }}" class="block text-sm font-medium text-zinc-700">Payment provider</label>
+                                            <select id="gateway-{{ $enrollment->id }}" name="gateway" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 sm:max-w-sm">
+                                                @foreach ($gatewayOptions as $gateway => $label)
+                                                    <option value="{{ $gateway }}" @selected($gateway === $defaultGateway)>{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800">
+                                            Pay now
+                                        </button>
+                                    </form>
+
+                                    <details class="mt-3 group">
+                                        <summary class="cursor-pointer text-sm font-medium text-zinc-600 hover:text-zinc-900">
+                                            Paid by bank transfer? Upload your receipt
+                                        </summary>
+                                        <div class="mt-1">
+                                            @livewire('public-site.proof-upload', ['enrollment' => $enrollment], key('proof-upload-'.$enrollment->id))
+                                        </div>
+                                    </details>
+                                @elseif ($enrollment->source === 'online')
+                                    <div class="mt-3">
+                                        <p class="text-sm font-medium text-zinc-700">Paid by bank transfer? Upload your receipt</p>
+                                        @livewire('public-site.proof-upload', ['enrollment' => $enrollment], key('proof-upload-'.$enrollment->id))
+                                    </div>
+                                @endif
                             @endif
                         </div>
                     @empty

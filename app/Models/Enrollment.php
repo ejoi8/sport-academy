@@ -7,6 +7,7 @@ use App\Enums\EnrollmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
@@ -70,6 +71,16 @@ class Enrollment extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(GatewayPayment::class, 'reference', 'booking_reference');
+    }
+
+    public function latestPayment(): HasOne
+    {
+        return $this->hasOne(GatewayPayment::class, 'reference', 'booking_reference')->latestOfMany();
     }
 
     public function activities(): MorphMany

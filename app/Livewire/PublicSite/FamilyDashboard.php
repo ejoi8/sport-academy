@@ -3,6 +3,7 @@
 namespace App\Livewire\PublicSite;
 
 use App\Models\Enrollment;
+use App\Support\PaymentInstructions;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -15,7 +16,7 @@ class FamilyDashboard extends Component
                 ->where('is_active', true)
                 ->with([
                     'enrollments' => fn ($enrollments) => $enrollments
-                        ->with(['offering.program'])
+                        ->with(['offering.program', 'latestPayment'])
                         ->withCount([
                             'attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES),
                         ])
@@ -26,6 +27,9 @@ class FamilyDashboard extends Component
 
         return view('livewire.public-site.family-dashboard', [
             'user' => $user,
+            'gatewayEnabled' => PaymentInstructions::usesHostedGateway(),
+            'gatewayOptions' => PaymentInstructions::hostedGatewayOptions(),
+            'defaultGateway' => PaymentInstructions::defaultHostedGateway(),
         ])->layout('layouts.public', [
             'title' => 'My Family',
         ]);

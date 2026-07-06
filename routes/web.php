@@ -4,6 +4,9 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Payments\CheckoutController;
+use App\Http\Controllers\Payments\ProofDownloadController;
+use App\Http\Controllers\Payments\ReturnController;
 use App\Http\Controllers\StudentReportController;
 use App\Livewire\PublicSite\BookingWizard;
 use App\Livewire\PublicSite\FamilyDashboard;
@@ -28,6 +31,13 @@ Route::middleware('guest')->group(function (): void {
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/family', FamilyDashboard::class)->name('family.index');
+    Route::post('/payments/enrollments/{enrollment}/checkout', CheckoutController::class)
+        ->middleware('throttle:5,1')
+        ->name('payments.checkout');
+    Route::get('/payments/enrollments/{enrollment}/return', ReturnController::class)
+        ->name('payments.return');
+    Route::get('/payments/proofs/{proof}', ProofDownloadController::class)
+        ->name('payments.proofs.show');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 

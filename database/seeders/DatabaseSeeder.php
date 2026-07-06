@@ -8,7 +8,7 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Seed a usable baseline: roles, a coach login (coach@academy.test / password),
-     * the Football rubric, a small catalog, and a starter roster.
+     * the Football rubric, and a small weekend catalog without students or enrollments.
      *
      * For richer, scenario-tagged data (multiple coaches, months of history and
      * scores) run the demo set instead:
