@@ -3,6 +3,7 @@
 use App\Models\AssessmentScore;
 use App\Models\Program;
 use App\Models\Skill;
+use App\Models\Student;
 use App\Models\TrainingSession;
 use App\Models\User;
 use Database\Seeders\BaselineSeeder;
@@ -14,8 +15,10 @@ uses(RefreshDatabase::class);
 it('seeds a usable baseline: rubric, catalog, and a coach login', function () {
     $this->seed(BaselineSeeder::class);
 
+    // Baseline = weekend catalog only (3 programs × Sat/Sun slots), no students or enrolments.
     expect(Skill::query()->active()->count())->toBe(7)
-        ->and(Program::count())->toBe(2);
+        ->and(Program::count())->toBe(3)
+        ->and(Student::count())->toBe(0);
 
     $coach = User::where('email', 'coach@academy.test')->firstOrFail();
     expect($coach->hasRole('super_admin'))->toBeTrue()

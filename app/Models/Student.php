@@ -66,15 +66,17 @@ class Student extends Model
      * make-up would draw from. Null means no live credits, so the student is a paying walk-in.
      *
      * Make-up credits are same-program only (see docs/credits-policy.md) — Run Training is
-     * responsible for applying that restriction, and always passes the session's program id.
-     * Callers that pass null get today's any-program behaviour (generic credit lookups/tests).
+     * responsible for applying that restriction, and always passes the session's program AND
+     * period; a future month's prepaid credits must never fund a make-up today. Null args keep
+     * legacy behaviour for generic callers (model tests call it no-arg).
      */
-    public function liveCreditEnrollment(?int $programId = null): ?Enrollment
+    public function liveCreditEnrollment(?int $programId = null, ?string $maxPeriod = null): ?Enrollment
     {
         return $this->enrollments()
             ->whereIn('status', ['active', 'pending', 'overdue'])
             ->where(fn ($query) => $query->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
             ->when($programId, fn ($query) => $query->whereHas('offering', fn ($q) => $q->where('program_id', $programId)))
+            ->when($maxPeriod, fn ($query) => $query->whereHas('offering', fn ($q) => $q->where('period', '<=', $maxPeriod)))
             ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->with('offering.program')
             ->orderBy('created_at')

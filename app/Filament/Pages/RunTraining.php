@@ -115,6 +115,27 @@ class RunTraining extends Page
         return Offering::whereKey($this->offeringId)->value('program_id');
     }
 
+    /**
+     * The period (YYYY-MM) of the session being recorded — the staged ad-hoc date's month, or the
+     * open offering's period. Make-up credits are capped at this period (see credits-policy).
+     */
+    protected function currentPeriod(): ?string
+    {
+        if ($this->creatingSession) {
+            if (blank($this->date)) {
+                return null;
+            }
+
+            try {
+                return Carbon::parse($this->date)->format('Y-m');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return Offering::query()->whereKey($this->offeringId)->value('period');
+    }
+
     public function mount(): void
     {
         // 1. URL wins: `date`/`offeringId` are already hydrated from the query string by the
@@ -351,8 +372,10 @@ class RunTraining extends Page
 
         $studentIds = $enrollments->pluck('student_id');
 
-        // Carry-over: unfinished sessions left on the student's OTHER live enrolments (other months
-        // or classes) — spendable here as make-ups. Policy is that unused credits accumulate and
+        $offering = Offering::query()->whereKey($this->offeringId)->first(['program_id', 'period']);
+
+        // Carry-over = unused credits from previous/started months of the SAME program — exactly
+        // what a make-up in this session could spend. Policy is that unused credits accumulate and
         // never expire by default, so this can build up across enrolments; one batched query avoids
         // an N+1 per roster row.
         $carryOver = Enrollment::query()
@@ -360,6 +383,7 @@ class RunTraining extends Page
             ->where('offering_id', '!=', $this->offeringId)
             ->whereIn('status', ['active', 'pending', 'overdue'])
             ->where(fn ($q) => $q->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
+            ->whereHas('offering', fn ($q) => $q->where('program_id', $offering?->program_id)->where('period', '<=', $offering?->period))
             ->withCount(['attendances as used_credits' => fn ($q) => $q->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->get()
             ->groupBy('student_id')
@@ -507,16 +531,17 @@ class RunTraining extends Page
 
         $onRoster = collect($this->roster)->pluck('student_id')->filter()->all();
         $programId = $this->currentProgramId();
+        $period = $this->currentPeriod();
 
         return Student::query()
             ->where(fn ($query) => $query->where('name', 'like', "%{$term}%")->orWhere('ic_number', 'like', "%{$term}%"))
             ->whereNotIn('id', $onRoster)
             ->limit(10)
             ->get()
-            ->map(function (Student $student) use ($programId): array {
+            ->map(function (Student $student) use ($programId, $period): array {
                 // Make-up only if they still hold a live credit in THIS session's program;
                 // otherwise a paying walk-in (no program context yet forces walk-in too).
-                $makeUp = $programId ? $student->liveCreditEnrollment($programId) : null;
+                $makeUp = $programId ? $student->liveCreditEnrollment($programId, $period) : null;
 
                 return [
                     'id' => $student->id,
@@ -579,7 +604,7 @@ class RunTraining extends Page
         // Make-up only if they still hold a live credit in THIS session's program; otherwise a
         // paying walk-in. The coach can also force a walk-in even when a make-up is available.
         $programId = $this->currentProgramId();
-        $makeUp = ($forceWalkIn || ! $programId) ? null : $student->liveCreditEnrollment($programId);
+        $makeUp = ($forceWalkIn || ! $programId) ? null : $student->liveCreditEnrollment($programId, $this->currentPeriod());
 
         $this->roster[$key] = $this->makeRow(
             $student,
@@ -902,7 +927,7 @@ class RunTraining extends Page
         }
 
         if ($type === ParticipantType::MakeUp->value) {
-            return Student::find($studentId)?->liveCreditEnrollment($this->currentProgramId())?->id;
+            return Student::find($studentId)?->liveCreditEnrollment($this->currentProgramId(), $this->currentPeriod())?->id;
         }
 
         return null;

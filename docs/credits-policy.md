@@ -9,12 +9,15 @@ credits by hand.
 1. **Each month's registration buys N sessions** ("credits" — usually 4).
 2. **Attending your own weekly class uses this month's credit.** Present, late,
    and absent all use one — the spot was held either way. Excused does not.
-3. **Unused credits never disappear** — they become "carried" credits.
+3. **Unused credits never disappear** — unused sessions from previous months
+   become "carried" credits.
 4. **Carried credits are spent by joining an EXTRA session in the SAME
    program** (any day, same class/program): the player joins free as a
-   make-up, oldest credits first. With no matching-program credits left, they
-   pay the walk-in fee instead — and the coach can always charge the walk-in
-   fee instead, even when credits exist.
+   make-up, oldest credits first. Carried credits are spendable in the same
+   program only, and only up to the session's own month — a future month's
+   prepaid credits never fund a make-up today. With no matching-program
+   credits left, they pay the walk-in fee instead — and the coach can always
+   charge the walk-in fee instead, even when credits exist.
 5. **Regular monthly sessions never touch carried credits** — this month's fee
    covers this month's classes.
 
@@ -37,7 +40,7 @@ credits by hand.
 | `2/4` | In progress — 2 of 4 paid sessions used. |
 | `4/4 · paid up` (amber) | All paid sessions used — renewal due soon. |
 | `5/4 · +1 over` (red) | Over-delivered — never blocked, just flagged for renewal. |
-| `+2 carried` | Unused sessions from a past enrolment — usable as free make-ups. |
+| `+2 carried` | Unused past sessions of this program, usable as free make-ups. |
 | `make-up` | Extra session, paid for by a carried credit. |
 | `walk-in · RM40` | Extra session with no credits available — pays the fee. |
 

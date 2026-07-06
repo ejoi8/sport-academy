@@ -151,8 +151,16 @@ it('consumes a credit and links the attendance to the enrolment when a session i
     $coach = User::where('email', 'coach@academy.test')->firstOrFail();
     $this->actingAs($coach);
 
-    $offering = Offering::where('is_open', true)->has('enrollments')->firstOrFail();
-    $enrolment = $offering->enrollments()->where('status', 'active')->firstOrFail();
+    // The baseline seeds a catalog without people — enrol one student ourselves.
+    $offering = Offering::where('is_open', true)->orderBy('id')->firstOrFail();
+    $student = Student::create(['name' => 'Credit Kid', 'is_active' => true]);
+    $enrolment = Enrollment::create([
+        'student_id' => $student->id,
+        'offering_id' => $offering->id,
+        'status' => 'active',
+        'price_sen' => $offering->price_sen,
+        'sessions_included' => $offering->session_count,
+    ]);
 
     Livewire::test(RunTraining::class)
         ->set('offeringId', $offering->id) // auto-loads the enrolled roster (all present)
@@ -168,4 +176,62 @@ it('consumes a credit and links the attendance to the enrolment when a session i
 
     expect($attendance)->not->toBeNull()
         ->and($attendance->status->value)->toBe('present');
+});
+
+it('caps make-up pools at the session period, still allowing past months', function () {
+    $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
+    $program = Program::create(['sport_id' => $sport->id, 'name' => 'Group', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]);
+    $student = Student::create(['name' => 'Period Kid', 'is_active' => true]);
+
+    $currentPeriod = now()->format('Y-m');
+    $nextPeriod = now()->addMonthNoOverflow()->format('Y-m');
+    $pastPeriod = now()->subMonthNoOverflow()->format('Y-m');
+
+    $futureOffering = Offering::create([
+        'program_id' => $program->id,
+        'period' => $nextPeriod,
+        'schedule_type' => 'recurring',
+        'weekday' => 3,
+        'start_time' => '18:00',
+        'end_time' => '19:30',
+        'capacity' => 12,
+        'session_count' => 4,
+        'price_sen' => 12000,
+        'is_open' => true,
+    ]);
+    Enrollment::create([
+        'student_id' => $student->id,
+        'offering_id' => $futureOffering->id,
+        'status' => 'active',
+        'price_sen' => 12000,
+        'sessions_included' => 4,
+    ]);
+
+    // Only the future pool exists — capping at the current period must find nothing.
+    expect($student->liveCreditEnrollment($program->id, $currentPeriod))->toBeNull();
+
+    $pastOffering = Offering::create([
+        'program_id' => $program->id,
+        'period' => $pastPeriod,
+        'schedule_type' => 'recurring',
+        'weekday' => 3,
+        'start_time' => '18:00',
+        'end_time' => '19:30',
+        'capacity' => 12,
+        'session_count' => 4,
+        'price_sen' => 12000,
+        'is_open' => true,
+    ]);
+    $pastEnrolment = Enrollment::create([
+        'student_id' => $student->id,
+        'offering_id' => $pastOffering->id,
+        'status' => 'active',
+        'price_sen' => 12000,
+        'sessions_included' => 4,
+    ]);
+
+    // The past pool is now present and must be found even though the future pool still exists.
+    $found = $student->liveCreditEnrollment($program->id, $currentPeriod);
+    expect($found)->not->toBeNull()
+        ->and($found->is($pastEnrolment))->toBeTrue();
 });

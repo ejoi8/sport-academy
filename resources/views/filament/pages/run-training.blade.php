@@ -165,8 +165,8 @@
                     <ol class="rt-help-rules">
                         <li>Each month's registration buys N sessions ("credits" — usually 4).</li>
                         <li>Attending your own weekly class uses this month's credit — present, late and absent all use one (the spot was held); excused does not.</li>
-                        <li>Unused credits never disappear — they become "carried" credits.</li>
-                        <li>Carried credits are spent by joining an extra session in the same program (any day, same class/program): free as a make-up, oldest credits first — with no matching-program credits left, they pay the walk-in fee.</li>
+                        <li>Unused credits never disappear — unused sessions from previous months become "carried" credits.</li>
+                        <li>Carried credits are spent by joining an extra session in the same program (any day, same class/program): free as a make-up, oldest credits first. Spendable in the same program only, and only up to the session's own month — a future month's prepaid credits never fund a make-up today. With no matching-program credits left, they pay the walk-in fee.</li>
                         <li>Regular monthly sessions never touch carried credits — this month's fee covers this month's classes.</li>
                     </ol>
                 </div>
@@ -187,7 +187,7 @@
                         <div class="rt-help-badgerow"><span class="rt-badge credits">2/4</span> <span>in progress — 2 of 4 paid sessions used.</span></div>
                         <div class="rt-help-badgerow"><span class="rt-badge credits full">4/4 · paid up</span> <span>all paid sessions used — renewal due soon.</span></div>
                         <div class="rt-help-badgerow"><span class="rt-badge credits over">5/4 · +1 over</span> <span>over-delivered — never blocked, just flagged.</span></div>
-                        <div class="rt-help-badgerow"><span class="rt-badge carry">+2 carried</span> <span>unused past sessions — usable as free make-ups.</span></div>
+                        <div class="rt-help-badgerow"><span class="rt-badge carry">+2 carried</span> <span>unused past sessions of this program, usable as free make-ups.</span></div>
                         <div class="rt-help-badgerow"><span class="rt-badge extra">make-up</span> <span>extra session paid by a carried credit.</span></div>
                         <div class="rt-help-badgerow"><span class="rt-badge walkin">walk-in · RM40</span> <span>extra session, no credits left — pays the fee.</span></div>
                     </div>
