@@ -684,6 +684,9 @@ class RunTraining extends Page
 
     public function saveCoach(): void
     {
+        // Minting a coach login is a staff action — defence in depth in case page access ever widens.
+        abort_unless((bool) Auth::user()?->hasAnyRole(['admin', 'coach', 'super_admin']), 403);
+
         $this->validate([
             'newCoachName' => ['required', 'string', 'max:255'],
             'newCoachEmail' => ['nullable', 'email', 'unique:users,email'],
@@ -1062,10 +1065,13 @@ class RunTraining extends Page
             ->pluck('total', 'offering_id')
             ->all();
 
+        // "Attended" = players who actually showed (present or late); absent/excused don't count.
+        // A separate plain count still tells us whether the session was recorded at all.
         $sessions = TrainingSession::query()
             ->whereIn('offering_id', $ids)
             ->where('session_date', $this->date)
-            ->withCount('attendances')
+            ->withCount(['attendances as attended_count' => fn (Builder $query) => $query
+                ->whereIn('status', [AttendanceStatus::Present->value, AttendanceStatus::Late->value])])
             ->get()
             ->keyBy('offering_id');
 
@@ -1075,7 +1081,7 @@ class RunTraining extends Page
             'time' => substr((string) $offering->start_time, 0, 5).($offering->end_time ? '–'.substr((string) $offering->end_time, 0, 5) : ''),
             'coach' => $offering->defaultCoach?->name,
             'enrolled' => (int) ($enrolled[$offering->id] ?? 0),
-            'attended' => (int) ($sessions[$offering->id]->attendances_count ?? 0),
+            'attended' => (int) ($sessions[$offering->id]->attended_count ?? 0),
             'recorded' => isset($sessions[$offering->id]),
         ])->all();
     }
