@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Enums\EnrollmentStatus;
 use App\Models\Enrollment;
 use Ejoi\PaymentGateway\Laravel\Events\PaymentStatusChanged;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ActivateEnrollmentOnPayment
@@ -15,8 +16,20 @@ class ActivateEnrollmentOnPayment
             return;
         }
 
+        // Lock the enrolment row for the duration of the status re-check + update so two
+        // concurrent paid events for the same booking (e.g. a gateway webhook racing a manual
+        // approval) cannot both read it as Pending and both activate — which would otherwise
+        // double-fire BookingConfirmed. The pending guard below becomes decisive under the lock.
+        DB::transaction(function () use ($event): void {
+            $this->activate($event);
+        });
+    }
+
+    protected function activate(PaymentStatusChanged $event): void
+    {
         $enrollment = Enrollment::query()
             ->where('booking_reference', $event->payment->reference)
+            ->lockForUpdate()
             ->first();
 
         if (! $enrollment) {
