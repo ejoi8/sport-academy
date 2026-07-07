@@ -2,17 +2,22 @@
 
 use App\Filament\Pages\Reports\AttendanceReport;
 use App\Filament\Pages\Reports\CreditLiabilityReport;
+use App\Filament\Pages\Reports\ProgressReport;
 use App\Filament\Pages\Reports\RevenueReport;
+use App\Models\AssessmentScore;
 use App\Models\Attendance;
 use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
+use App\Models\Skill;
+use App\Models\SkillCategory;
 use App\Models\Sport;
 use App\Models\Student;
 use App\Models\TrainingSession;
 use App\Models\User;
 use App\Support\Reporting\AttendanceSummary;
 use App\Support\Reporting\CreditLiabilitySummary;
+use App\Support\Reporting\ProgressSummary;
 use App\Support\Reporting\RevenueSummary;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -287,4 +292,61 @@ it('gives the attendance report to staff and coaches, but a coach only sees thei
     // Coach scoping is enforced server-side: even if a coach passes ?coach=, they see only their own.
     $data = AttendanceSummary::for(now()->format('Y-m'), $coach->id);
     expect($data['sessions_delivered'])->toBe(1);
+});
+
+function reportScored(Offering $offering, Skill $skill, int $score, string $date): void
+{
+    $session = TrainingSession::firstOrCreate(['offering_id' => $offering->id, 'session_date' => $date]);
+    $student = Student::create(['name' => fake()->name(), 'is_active' => true]);
+    $attendance = Attendance::create([
+        'training_session_id' => $session->id,
+        'student_id' => $student->id,
+        'participant_type' => 'walk_in',
+        'status' => 'present',
+    ]);
+    AssessmentScore::create(['attendance_id' => $attendance->id, 'skill_id' => $skill->id, 'score' => $score]);
+}
+
+it('rolls up per-program skill averages in rubric order', function () {
+    $program = reportProgram();
+    $sport = Sport::where('name', 'Football')->firstOrFail();
+    $offering = reportOffering($program, now()->format('Y-m'));
+    $category = SkillCategory::create(['sport_id' => $sport->id, 'name' => 'Technical', 'sort_order' => 1]);
+    $passing = Skill::create(['sport_id' => $sport->id, 'skill_category_id' => $category->id, 'name' => 'Passing', 'sort_order' => 1]);
+    $shooting = Skill::create(['sport_id' => $sport->id, 'skill_category_id' => $category->id, 'name' => 'Shooting', 'sort_order' => 2]);
+    $date = now()->startOfMonth()->toDateString();
+
+    reportScored($offering, $passing, 4, $date);
+    reportScored($offering, $passing, 2, $date); // Passing avg = 3.0
+    reportScored($offering, $shooting, 5, $date); // Shooting avg = 5.0
+
+    $group = ProgressSummary::build()['by_program']['Group'];
+
+    expect($group['total_scores'])->toBe(3)
+        ->and($group['overall_average'])->toBe(3.7) // (4+2+5)/3
+        ->and($group['skills'][0]['skill'])->toBe('Passing') // rubric order
+        ->and(collect($group['skills'])->firstWhere('skill', 'Passing')['average'])->toBe(3.0)
+        ->and(collect($group['skills'])->firstWhere('skill', 'Shooting')['average'])->toBe(5.0);
+});
+
+it('gives the program-progress report to staff and coaches, blocks parents', function () {
+    $program = reportProgram();
+    $sport = Sport::where('name', 'Football')->firstOrFail();
+    $offering = reportOffering($program, now()->format('Y-m'));
+    $category = SkillCategory::create(['sport_id' => $sport->id, 'name' => 'Technical', 'sort_order' => 1]);
+    $passing = Skill::create(['sport_id' => $sport->id, 'skill_category_id' => $category->id, 'name' => 'Passing', 'sort_order' => 1]);
+    reportScored($offering, $passing, 4, now()->startOfMonth()->toDateString());
+
+    $this->actingAs(reportStaff());
+    Livewire::test(ProgressReport::class)->assertOk();
+    expect(ProgressReport::canAccess())->toBeTrue();
+    $this->get(route('reports.progress'))->assertOk()->assertSee('Program Progress');
+    $this->get(route('reports.progress', ['format' => 'csv']))->assertOk()->assertDownload();
+
+    $this->actingAs(reportCoach());
+    expect(ProgressReport::canAccess())->toBeTrue();
+
+    $this->actingAs(reportParent());
+    expect(ProgressReport::canAccess())->toBeFalse();
+    $this->get(route('reports.progress'))->assertForbidden();
 });

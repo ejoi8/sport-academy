@@ -12,6 +12,10 @@
                         <h2 class="text-xl font-semibold text-zinc-950">{{ $student->name }}</h2>
                         <p class="mt-1 text-sm text-zinc-500">Lifetime: {{ $student->creditSummary()['attended'] }}/{{ $student->creditSummary()['purchased'] }} used · +{{ $student->carriedCreditsCount() }} carried</p>
                     </div>
+                    <a href="{{ route('students.report', $student) }}" target="_blank"
+                        class="inline-flex items-center gap-1 self-start rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 sm:self-end">
+                        Progress report
+                    </a>
                 </div>
 
                 <div class="mt-5 space-y-3">

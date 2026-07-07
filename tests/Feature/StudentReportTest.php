@@ -78,12 +78,22 @@ it('renders the progress report for staff', function () {
         ->assertSee('Passing');
 });
 
-it('forbids the report to a parent', function () {
+it('lets a parent view their own child\'s report but not another child\'s', function () {
     $student = studentWithScores();
     $parent = User::factory()->create();
     $parent->assignRole(Role::firstOrCreate(['name' => 'parent', 'guard_name' => 'web']));
 
+    // Not their child yet — forbidden.
     $this->actingAs($parent)
         ->get(route('students.report', $student))
         ->assertForbidden();
+
+    // Once it's their child, they can view and print it.
+    $student->update(['parent_id' => $parent->id]);
+
+    $this->actingAs($parent)
+        ->get(route('students.report', $student))
+        ->assertOk()
+        ->assertSee('Adam Rahman')
+        ->assertSee('Passing');
 });

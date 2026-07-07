@@ -11,6 +11,7 @@ use App\Http\Controllers\Reports\AttendanceReportController;
 use App\Http\Controllers\Reports\CreditLiabilityReportController;
 use App\Http\Controllers\Reports\EnrollmentsExportController;
 use App\Http\Controllers\Reports\PaymentsExportController;
+use App\Http\Controllers\Reports\ProgressReportController;
 use App\Http\Controllers\Reports\RevenueReportController;
 use App\Http\Controllers\StudentReportController;
 use App\Livewire\PublicSite\BookingWizard;
@@ -55,6 +56,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/reports/revenue', RevenueReportController::class)->name('reports.revenue');
     Route::get('/reports/credit-liability', CreditLiabilityReportController::class)->name('reports.credit-liability');
     Route::get('/reports/attendance', AttendanceReportController::class)->name('reports.attendance');
+    Route::get('/reports/progress', ProgressReportController::class)->name('reports.progress');
     Route::get('/reports/enrolments.csv', EnrollmentsExportController::class)->name('reports.enrollments.csv');
     Route::get('/reports/payments.csv', PaymentsExportController::class)->name('reports.payments.csv');
 });

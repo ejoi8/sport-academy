@@ -9,12 +9,16 @@ use Illuminate\View\View;
 class StudentReportController extends Controller
 {
     /**
-     * A print-friendly progress report for one student (staff only).
+     * A print-friendly progress report for one student. Staff may view any student; a parent may
+     * view (and print) only their own child.
      */
     public function __invoke(Request $request, Student $student): View
     {
+        $user = $request->user();
+        $ownsChild = $user !== null && $student->parent_id === $user->id;
+
         abort_unless(
-            (bool) $request->user()?->hasAnyRole(['admin', 'coach', 'super_admin']),
+            (bool) $user?->hasAnyRole(['admin', 'coach', 'super_admin']) || $ownsChild,
             403,
         );
 
