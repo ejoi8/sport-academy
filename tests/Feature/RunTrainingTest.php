@@ -33,11 +33,11 @@ function runTrainingContext(): array
     $coach = User::where('email', 'coach@academy.test')->firstOrFail();
     $skill = Skill::query()->orderBy('sort_order')->firstOrFail();
 
-    // The baseline seeds a weekend catalog WITHOUT people — pick the Saturday-morning Group
-    // slot deterministically and enrol a small roster ourselves.
+    // The baseline seeds a weekend catalog WITHOUT people — pick the Saturday Group slot
+    // deterministically and enrol a small roster ourselves.
     $offering = Offering::query()
         ->where('is_open', true)
-        ->whereHas('program', fn ($query) => $query->where('name', 'Group Training'))
+        ->whereHas('program', fn ($query) => $query->where('name', 'Group'))
         ->where('weekday', 6)
         ->orderBy('start_time')
         ->firstOrFail();
@@ -642,7 +642,7 @@ it('ignores other-program and future-month credits in carry-over', function () {
 
     $studentId = (int) substr($key, 1);
 
-    $oneToOne = Offering::whereHas('program', fn ($q) => $q->where('name', 'One-to-One'))->orderBy('id')->firstOrFail();
+    $oneToOne = Offering::whereHas('program', fn ($q) => $q->where('name', '1-on-1'))->orderBy('id')->firstOrFail();
 
     Enrollment::create([
         'student_id' => $studentId,
@@ -716,7 +716,7 @@ it('offers only a paying walk-in for a different-program session', function () {
     $studentName = Student::findOrFail($studentId)->name;
 
     // A different program's offering — same seeder, no shared credits.
-    $oneToOne = Offering::whereHas('program', fn ($q) => $q->where('name', 'One-to-One'))->orderBy('id')->firstOrFail();
+    $oneToOne = Offering::whereHas('program', fn ($q) => $q->where('name', '1-on-1'))->orderBy('id')->firstOrFail();
     expect($oneToOne->program_id)->not->toBe($offering->program_id);
 
     $saturday = Carbon::parse($oneToOne->period.'-01')->startOfMonth();

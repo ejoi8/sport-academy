@@ -21,9 +21,12 @@ use Spatie\Permission\Models\Role;
 
 /**
  * Demo data:
- *  - Three recurring weekly programs (1-on-1, Group, Goalkeeper), ~4 sessions a month each.
+ *  - Two recurring weekly programs on the academy's real weekend timetable — Group (Sabtu
+ *    petang, Sat 16:00–18:00, cap 40) and 1-on-1 (Sabtu petang Sat 16:00–18:00 and Ahad pagi
+ *    Sun 09:00–11:00, cap 12 each) — 4 sessions a month each.
  *  - One Football Clinic one-off (the month's 2nd Saturday afternoon).
- *  - 100 students per program, each attached to a parent account.
+ *  - A cohort of students per slot sized under that slot's capacity (not a flat 100), each
+ *    attached to a parent account.
  *  - An admin login: admin@admin.com / password.
  *
  * Last month's occurrences are recorded (attendance + rubric scores); this month's are recorded
@@ -31,8 +34,6 @@ use Spatie\Permission\Models\Role;
  */
 class DemoSeeder extends Seeder
 {
-    private const COHORT_SIZE = 100;
-
     private const FAMILY_SIZE = 4;
 
     /** @var Collection<int, Skill> */
@@ -88,11 +89,13 @@ class DemoSeeder extends Seeder
         $currentPeriod = $currentMonth->format('Y-m');
         $historyPeriod = $historyMonth->format('Y-m');
 
-        // Three recurring weekly programs.
+        // The academy's real weekend timetable: a Group class on Sabtu petang (Sat 16:00–18:00)
+        // and 1-on-1 coaching on both Sabtu petang and Ahad pagi (Sun 09:00–11:00). 'cohort' is
+        // sized under 'cap' (not a flat number) so the demo shows realistic headroom per slot.
         $this->slots = [
-            'one-to-one' => ['program' => '1-on-1', 'weekday' => 3, 'start' => '18:00', 'end' => '19:00', 'cap' => 120, 'price' => 28000, 'coach' => 'Farid', 'label' => '1-on-1'],
-            'group' => ['program' => 'Group', 'weekday' => 6, 'start' => '09:00', 'end' => '10:30', 'cap' => 120, 'price' => 12000, 'coach' => 'Amir', 'label' => 'Group'],
-            'goalkeeper' => ['program' => 'Goalkeeper', 'weekday' => 7, 'start' => '09:00', 'end' => '10:00', 'cap' => 120, 'price' => 15000, 'coach' => 'Lena', 'label' => 'Goalkeeper'],
+            'group-sat' => ['program' => 'group', 'weekday' => 6, 'start' => '16:00', 'end' => '18:00', 'cap' => 40, 'price' => 12000, 'coach' => 'Amir', 'label' => 'Group Sat', 'cohort' => 32],
+            'one2one-sat' => ['program' => 'one2one', 'weekday' => 6, 'start' => '16:00', 'end' => '18:00', 'cap' => 12, 'price' => 30000, 'coach' => 'Farid', 'label' => '1-on-1 Sat', 'cohort' => 8],
+            'one2one-sun' => ['program' => 'one2one', 'weekday' => 7, 'start' => '09:00', 'end' => '11:00', 'cap' => 12, 'price' => 30000, 'coach' => 'Lena', 'label' => '1-on-1 Sun', 'cohort' => 8],
         ];
 
         foreach ($this->slots as $code => $cfg) {
@@ -102,6 +105,7 @@ class DemoSeeder extends Seeder
                 $this->offerings["$currentPeriod|$code"],
                 $this->offerings["$historyPeriod|$code"],
                 $cfg['label'],
+                $cfg['cohort'],
             );
         }
 
@@ -126,7 +130,7 @@ class DemoSeeder extends Seeder
             'is_open' => true,
         ]);
         $this->offerings["$currentPeriod|clinic"] = $clinic;
-        $this->enrolFamilies($clinic, null, 'Clinic');
+        $this->enrolFamilies($clinic, null, 'Clinic', 100);
 
         // --- Scenario layer: every credit/attendance edge case, scripted deterministically. ---
         $this->createScenarioSlot($programs, $historyPeriod, $currentPeriod, $historyMonth);
@@ -154,7 +158,7 @@ class DemoSeeder extends Seeder
 
     private function createCoaches(): void
     {
-        foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test'] as $name => $email) {
+        foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
             $coach = User::firstOrCreate(
                 ['email' => $email],
                 ['name' => 'Coach '.$name, 'password' => $this->password, 'email_verified_at' => now()],
@@ -166,14 +170,18 @@ class DemoSeeder extends Seeder
     }
 
     /**
+     * The two real coaching programs — Group and 1-on-1 — plus the one-off Football Clinic.
+     * Walk-in fees aren't part of the published plans; each is estimated as
+     * (monthly price ÷ 4 sessions) × 1.25 — a single drop-in session costs a bit more than the
+     * per-session subscription rate.
+     *
      * @return array<string, Program>
      */
     private function createPrograms(Sport $sport): array
     {
         return [
-            '1-on-1' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 28000, 'walk_in_fee_sen' => 8000, 'default_sessions' => 4]),
-            'Group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group Training', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]),
-            'Goalkeeper' => Program::create(['sport_id' => $sport->id, 'name' => 'Goalkeeper', 'base_price_sen' => 15000, 'walk_in_fee_sen' => 5000, 'default_sessions' => 4]),
+            'group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 3750, 'default_sessions' => 4]),
+            'one2one' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 30000, 'walk_in_fee_sen' => 9375, 'default_sessions' => 4]),
             'Football Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Football Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]),
         ];
     }
@@ -200,14 +208,15 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Enrol 100 students (in families of four, each under its own parent) into a session — and into
-     * last month's offering too, when given, so history records.
+     * Enrol $cohortSize students (in families of four, each under its own parent) into a session
+     * — and into last month's offering too, when given, so history records. $cohortSize must be
+     * a multiple of FAMILY_SIZE.
      */
-    private function enrolFamilies(Offering $current, ?Offering $history, string $label): void
+    private function enrolFamilies(Offering $current, ?Offering $history, string $label, int $cohortSize): void
     {
         $child = 0;
 
-        for ($f = 1; $f <= (int) (self::COHORT_SIZE / self::FAMILY_SIZE); $f++) {
+        for ($f = 1; $f <= (int) ($cohortSize / self::FAMILY_SIZE); $f++) {
             $parent = $this->makeParent($label.' family '.$f);
 
             for ($c = 1; $c <= self::FAMILY_SIZE; $c++) {
@@ -236,19 +245,19 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * "Scenario slot" — a Group Training class closed for registration (is_open = false), created
-     * for both months, proving closed classes still record and display. The history side gets its
-     * first 4 Saturdays recorded as sessions S1-S4; the current side gets enrolments but no
-     * recorded sessions.
+     * "Scenario slot" — a Group class closed for registration (is_open = false), created for both
+     * months, proving closed classes still record and display. The history side gets its first 4
+     * Saturdays recorded as sessions S1-S4; the current side gets enrolments but no recorded
+     * sessions.
      *
      * @param  array<string, Program>  $programs
      */
     private function createScenarioSlot(array $programs, string $historyPeriod, string $currentPeriod, Carbon $historyMonth): void
     {
-        $cfg = ['weekday' => 6, 'start' => '11:00', 'end' => '12:30', 'cap' => 20, 'price' => 12000, 'coach' => 'Lena'];
+        $cfg = ['weekday' => 6, 'start' => '11:00', 'end' => '12:30', 'cap' => 10, 'price' => 12000, 'coach' => 'Lena'];
 
         $base = [
-            'program_id' => $programs['Group']->id,
+            'program_id' => $programs['group']->id,
             'schedule_type' => 'recurring',
             'weekday' => $cfg['weekday'],
             'start_time' => $cfg['start'],
@@ -329,8 +338,8 @@ class DemoSeeder extends Seeder
         $this->scenarioAttendance($s1, $fara, $faraEnrol, 'enrolled', 'present');
 
         // Gopal — make-up: present S1,S2 on the scenario slot; a third credit is consumed via a
-        // SAME-PROGRAM (Group) MAIN offering's session via attachGopalMakeUp(), once that offering
-        // has recorded sessions. Make-up credits are same-program only (see credits-policy.md).
+        // SAME-PROGRAM (Group) MAIN offering's session via attachGopalMakeUp(), once that
+        // offering has recorded sessions. Make-up credits are same-program only (see credits-policy.md).
         $gopal = $this->makeStudent($this->makeParent('Scenario Gopal')->id, 'SC Gopal (make-up)');
         $this->gopalEnrollment = $this->scenarioEnrol($gopal, $history);
         $this->scenarioAttendance($s1, $gopal, $this->gopalEnrollment, 'enrolled', 'present');
@@ -430,9 +439,9 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Second-team overlap: a one-off Group Training offering on the same date+time as the main
-     * recurring Group Sat 09:00-10:30 class, proving two same-time cards render for one date. Only
-     * recorded (with walk-ins) if that Saturday has already happened.
+     * Second-team overlap: a one-off Group offering on the same date+time as the main recurring
+     * Group Sat 16:00-18:00 class, proving two same-time cards render for one date. Only recorded
+     * (with walk-ins) if that Saturday has already happened.
      *
      * @param  array<string, Program>  $programs
      */
@@ -444,12 +453,12 @@ class DemoSeeder extends Seeder
         }
 
         $offering = Offering::create([
-            'program_id' => $programs['Group']->id,
+            'program_id' => $programs['group']->id,
             'period' => $currentMonth->format('Y-m'),
             'schedule_type' => 'one_off',
             'specific_date' => $firstSaturday->toDateString(),
-            'start_time' => '09:00',
-            'end_time' => '10:30',
+            'start_time' => '16:00',
+            'end_time' => '18:00',
             'capacity' => 0,
             'session_count' => 4,
             'price_sen' => 12000,
@@ -488,7 +497,7 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        $mainOffering = $this->offerings["$historyPeriod|group"] ?? null;
+        $mainOffering = $this->offerings["$historyPeriod|group-sat"] ?? null;
         $session = $mainOffering?->trainingSessions()->orderBy('session_date')->first();
 
         if (! $session) {
@@ -732,8 +741,8 @@ class DemoSeeder extends Seeder
 
     private function coachForIndex(int $index): int
     {
-        $names = ['Farid', 'Amir', 'Lena'];
+        $names = ['Farid', 'Amir', 'Lena', 'Hafiz'];
 
-        return $this->coaches[$names[$index % 3]]->id;
+        return $this->coaches[$names[$index % 4]]->id;
     }
 }
