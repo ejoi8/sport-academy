@@ -30,6 +30,7 @@ class BaselineSeeder extends Seeder
             ['email' => 'coach@academy.test'],
             [
                 'name' => 'Coach Farid',
+                'phone' => '012-000 1001', // gateways refuse a checkout without a customer phone
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
             ],

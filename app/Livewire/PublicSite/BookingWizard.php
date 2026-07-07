@@ -89,8 +89,8 @@ class BookingWizard extends Component
             $this->validateStepOne();
         }
 
-        if ($this->step === 2 && ! Auth::check()) {
-            $this->validateStepTwo();
+        if ($this->step === 2) {
+            Auth::check() ? $this->validatePhoneIfMissing() : $this->validateStepTwo();
         }
 
         $this->step = min(4, $this->step + 1);
@@ -113,7 +113,9 @@ class BookingWizard extends Component
 
         $this->validateStepOne();
 
-        if (! Auth::check()) {
+        if (Auth::check()) {
+            $this->validatePhoneIfMissing();
+        } else {
             $this->validateStepTwo();
         }
 
@@ -265,10 +267,29 @@ class BookingWizard extends Component
         $this->validate([
             'accountName' => ['required', 'string', 'max:255'],
             'accountEmail' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'accountPhone' => ['nullable', 'string', 'max:255'],
+            // Required: payment gateways (e.g. toyyibPay) refuse to open a checkout without a
+            // customer phone, and the academy needs a contact number anyway.
+            'accountPhone' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8', 'same:passwordConfirmation'],
             'passwordConfirmation' => ['required', 'string', 'min:8'],
         ]);
+    }
+
+    /**
+     * A logged-in booker whose account has no phone yet must supply one — submit() already
+     * saves a changed accountPhone back onto the account, so this just enforces it's filled.
+     */
+    protected function validatePhoneIfMissing(): void
+    {
+        if (filled((string) (Auth::user()?->phone ?? ''))) {
+            return;
+        }
+
+        $this->validate(
+            ['accountPhone' => ['required', 'string', 'max:255']],
+            ['accountPhone.required' => 'A contact phone number is needed for payment and class updates.'],
+            ['accountPhone' => 'phone'],
+        );
     }
 
     public function paymentInstructions(): array

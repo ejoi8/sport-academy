@@ -86,7 +86,9 @@ class CheckoutController
             customer: new Customer(
                 $enrollment->student?->parent?->email ?? $request->user()->email,
                 $enrollment->student?->parent?->name ?? $request->user()->name,
-                $enrollment->student?->parent?->phone,
+                // Some gateways (toyyibPay) refuse a bill without a phone — fall back to the
+                // child's guardian phone when the parent account doesn't carry one.
+                $enrollment->student?->parent?->phone ?: $enrollment->student?->guardian_phone,
             ),
             redirectUrl: route('payments.return', $enrollment),
             callbackUrl: route('payment-gateway.webhook', $gateway),
@@ -96,7 +98,19 @@ class CheckoutController
             ],
         ));
 
-        abort_unless(filled($payment->checkout_url), 409);
+        // The gateway refused to open a checkout (e.g. toyyibPay: "billPhone parameter is
+        // empty"). Never show the parent an exception page — send them back to My Family with
+        // the provider's reason so they can fix their details or use the bank-transfer path.
+        if (blank($payment->checkout_url)) {
+            $reason = data_get($payment->last_response, 'msg')
+                ?? data_get($payment->last_response, 'message');
+
+            return redirect()
+                ->route('family.index')
+                ->with('error', 'We could not start the online payment'
+                    .($reason ? ' — the provider said: "'.$reason.'"' : '')
+                    .'. Please check your contact details and try again, or upload a bank-transfer receipt instead.');
+        }
 
         return redirect()->away($payment->checkout_url);
     }

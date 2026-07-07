@@ -108,6 +108,7 @@ it('lets a logged-in parent book an existing child and rejects a duplicate booki
     Livewire::test(BookingWizard::class, ['offering' => $offering])
         ->set('useExistingStudent', true)
         ->set('existingStudentId', $student->id)
+        ->set('accountPhone', '0123456789')
         ->set('agreedToPolicy', true)
         ->call('submit')
         ->assertSet('step', 4);
@@ -117,9 +118,41 @@ it('lets a logged-in parent book an existing child and rejects a duplicate booki
     Livewire::test(BookingWizard::class, ['offering' => $offering])
         ->set('useExistingStudent', true)
         ->set('existingStudentId', $student->id)
+        ->set('accountPhone', '0123456789')
         ->set('agreedToPolicy', true)
         ->call('submit')
         ->assertHasErrors(['submit']);
+});
+
+it('requires a contact phone before booking, and saves it onto a phone-less account', function () {
+    Notification::fake();
+
+    $parent = parentUser(); // factory users carry no phone
+    $student = Student::create(['parent_id' => $parent->id, 'name' => 'Nadia', 'is_active' => true]);
+    [, $offering] = publicProgram();
+
+    $this->actingAs($parent);
+
+    // Without a phone the booking is refused — gateways like toyyibPay cannot bill without one.
+    Livewire::test(BookingWizard::class, ['offering' => $offering])
+        ->set('useExistingStudent', true)
+        ->set('existingStudentId', $student->id)
+        ->set('agreedToPolicy', true)
+        ->call('submit')
+        ->assertHasErrors(['accountPhone']);
+
+    expect(Enrollment::count())->toBe(0);
+
+    // Supplying one lets the booking through and persists it to the account for next time.
+    Livewire::test(BookingWizard::class, ['offering' => $offering])
+        ->set('useExistingStudent', true)
+        ->set('existingStudentId', $student->id)
+        ->set('accountPhone', '0198765432')
+        ->set('agreedToPolicy', true)
+        ->call('submit')
+        ->assertSet('step', 4);
+
+    expect($parent->refresh()->phone)->toBe('0198765432');
 });
 
 it('rejects online booking for a full class and counts pending seats', function () {
@@ -147,6 +180,7 @@ it('rejects online booking for a full class and counts pending seats', function 
     Livewire::test(BookingWizard::class, ['offering' => $offering])
         ->set('useExistingStudent', false)
         ->set('studentName', 'Late Booker')
+        ->set('accountPhone', '0123456789')
         ->set('agreedToPolicy', true)
         ->call('submit')
         ->assertHasErrors(['submit']);

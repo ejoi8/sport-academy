@@ -151,17 +151,21 @@ class DemoSeeder extends Seeder
     {
         $admin = User::firstOrCreate(
             ['email' => 'admin@admin.com'],
-            ['name' => 'Admin', 'password' => $this->password, 'email_verified_at' => now()],
+            ['name' => 'Admin', 'phone' => '012-000 0001', 'password' => $this->password, 'email_verified_at' => now()],
         );
         $admin->assignRole('super_admin');
     }
 
     private function createCoaches(): void
     {
+        // Every login gets a phone — hosted gateways (e.g. toyyibPay) refuse a bill without one,
+        // and staff accounts are regularly used to walk through the parent booking flow in demos.
+        $sequence = 1;
+
         foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
             $coach = User::firstOrCreate(
                 ['email' => $email],
-                ['name' => 'Coach '.$name, 'password' => $this->password, 'email_verified_at' => now()],
+                ['name' => 'Coach '.$name, 'phone' => '012-000 100'.$sequence++, 'password' => $this->password, 'email_verified_at' => now()],
             );
             $coach->assignRole('super_admin');
             $coach->assignRole('coach');
@@ -678,6 +682,7 @@ class DemoSeeder extends Seeder
         $parent = User::create([
             'name' => 'Parent '.$name,
             'email' => 'parent'.(++$this->parentSeq).'@demo.test',
+            'phone' => sprintf('013-%03d %04d', intdiv($this->parentSeq, 10000), $this->parentSeq % 10000),
             'password' => $this->password,
             'email_verified_at' => now(),
         ]);

@@ -663,3 +663,96 @@ it('lets an admin reject an uploaded proof, keeping the enrolment pending for re
         ->assertSet('uploaded', false)
         ->assertSee('Your previous receipt could not be confirmed');
 });
+
+it('redirects back with a friendly error when the gateway opens no checkout page', function () {
+    config(hostedGatewayConfig([
+        'payment-gateway.gateways.nourl' => ['driver' => 'nourl'],
+    ]));
+
+    [$parent, , , $enrollment] = integrationPendingEnrollment();
+
+    app(PaymentGatewayManager::class)->extend('nourl', function ($config, HttpClient $http): PaymentGatewayContract {
+        return new class implements PaymentGatewayContract
+        {
+            public function name(): string
+            {
+                return 'nourl';
+            }
+
+            public function createPayment(PaymentRequest $request): PaymentResponse
+            {
+                // Mirrors toyyibPay refusing a bill: an error reply and no redirect URL.
+                return new PaymentResponse(
+                    gatewayReference: '',
+                    redirectUrl: '',
+                    status: PaymentStatus::Pending,
+                    raw: ['status' => 'error', 'msg' => 'billPhone parameter is empty'],
+                );
+            }
+
+            public function verifyCallback(CallbackPayload $payload): PaymentStatusResult
+            {
+                throw new RuntimeException('not used');
+            }
+
+            public function queryStatus(string $gatewayReference): PaymentStatusResult
+            {
+                throw new RuntimeException('not used');
+            }
+        };
+    });
+
+    $this->actingAs($parent)
+        ->post(route('payments.checkout', $enrollment), ['gateway' => 'nourl'])
+        ->assertRedirect(route('family.index'))
+        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'billPhone parameter is empty'));
+
+    // No exception page, and the enrolment simply stays pending.
+    expect($enrollment->refresh()->status)->toBe(EnrollmentStatus::Pending);
+});
+
+it('falls back to the guardian phone when the parent account has none', function () {
+    config(hostedGatewayConfig([
+        'payment-gateway.gateways.phonecheck' => ['driver' => 'phonecheck'],
+    ]));
+
+    [$parent, $student, , $enrollment] = integrationPendingEnrollment();
+    expect($parent->phone)->toBeNull(); // factory accounts carry no phone
+    $student->update(['guardian_phone' => '0111222333']);
+
+    app(PaymentGatewayManager::class)->extend('phonecheck', function ($config, HttpClient $http): PaymentGatewayContract {
+        return new class implements PaymentGatewayContract
+        {
+            public function name(): string
+            {
+                return 'phonecheck';
+            }
+
+            public function createPayment(PaymentRequest $request): PaymentResponse
+            {
+                expect($request->customer?->phone)->toBe('0111222333');
+
+                return new PaymentResponse(
+                    gatewayReference: 'phone-ref',
+                    redirectUrl: 'https://gateway.test/pay/phone',
+                    status: PaymentStatus::Pending,
+                    raw: [],
+                );
+            }
+
+            public function verifyCallback(CallbackPayload $payload): PaymentStatusResult
+            {
+                throw new RuntimeException('not used');
+            }
+
+            public function queryStatus(string $gatewayReference): PaymentStatusResult
+            {
+                throw new RuntimeException('not used');
+            }
+        };
+    });
+
+    $this->actingAs($parent)
+        ->post(route('payments.checkout', $enrollment), ['gateway' => 'phonecheck'])
+        ->assertRedirect('https://gateway.test/pay/phone');
+});
