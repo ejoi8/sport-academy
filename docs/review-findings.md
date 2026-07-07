@@ -5,11 +5,24 @@ snapshots, on-demand sessions, the Run Training writer) and the booking/payment 
 are well-built and internally consistent — this note only records what needs attention. Two
 items need a **decision** (they are not obvious one-liners); the rest are minor.
 
-One fix from this review already shipped: `carriedCreditsCount()` now honours
-`credits_expire_at` (commit `fix(credits): exclude expired credits from the carried-credit
-count`).
+## Status — all items patched (2026-07-07)
 
-## Decisions needed
+Every finding below has now been addressed on this branch. Summary of what shipped and the
+decisions taken:
+
+| Item | Resolution | Commit |
+|---|---|---|
+| Carried credits | `carriedCreditsCount()` now honours `credits_expire_at` | `fix(credits): exclude expired credits…` |
+| **D1** authorization | **Decision:** keep staff-wide access (permissive by design), but make the super-admin bypass real — keyed to `super_admin`, with the delete family excluded so the history guardrails still hold for everyone. | `fix(auth): make the super_admin gate real…` |
+| **D2** `AcademySettings` | **Decision:** delete the orphaned scaffold (can return with the enum + migration when scheduled). | `chore(settings): remove orphaned AcademySettings…` |
+| M1 activation race | Enrolment row locked (`lockForUpdate`) inside a transaction during activation. | `fix(payments): lock the enrolment row…` |
+| M2 `saveCoach` | Asserts the actor holds a staff role before minting a coach login. | `fix(run-training): …guard coach creation` |
+| M3 re-book message | Distinguishes a cancelled (soft-deleted) enrolment and points to staff. | `fix(booking): clearer message…` |
+| M4 attended count | Session card counts only present + late as attended (regression test added). | `fix(run-training): count only present/late…` |
+
+The detail below is kept as the record of *why* each change was made.
+
+## Findings (all resolved above)
 
 ### D1 — Authorization: `Gate::before` is dead, and "fixing" it would break a delete guardrail
 
