@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class Student extends Model
@@ -134,6 +135,37 @@ class Student extends Model
             })
             ->sortBy('sort')
             ->values();
+    }
+
+    /**
+     * Every recorded session for this student, newest first — date, timeslot, status, coach, note
+     * and the per-skill scores (in rubric order). This is the session-by-session detail behind the
+     * attendance and assessment summaries.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function sessionHistory(): Collection
+    {
+        return $this->attendances()
+            ->with(['trainingSession.offering.program', 'coach', 'scores.skill'])
+            ->get()
+            ->sortByDesc(fn (Attendance $attendance): string => (string) $attendance->trainingSession?->session_date)
+            ->values()
+            ->map(fn (Attendance $attendance): array => [
+                'date' => $attendance->trainingSession?->session_date
+                    ? Carbon::parse($attendance->trainingSession->session_date)
+                    : null,
+                'timeslot' => $attendance->trainingSession?->offering?->label() ?? '—',
+                'status' => $attendance->status->value,
+                'type' => $attendance->participant_type->value,
+                'coach' => $attendance->coach?->name,
+                'note' => $attendance->note,
+                'scores' => $attendance->scores
+                    ->sortBy(fn (AssessmentScore $score): int => $score->skill?->sort_order ?? 0)
+                    ->map(fn (AssessmentScore $score): array => ['skill' => $score->skill?->name, 'score' => $score->score])
+                    ->values()
+                    ->all(),
+            ]);
     }
 
     /**

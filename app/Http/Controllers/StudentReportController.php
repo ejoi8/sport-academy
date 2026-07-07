@@ -27,6 +27,7 @@ class StudentReportController extends Controller
             'summary' => $student->assessmentSummary(),
             'attendance' => $student->attendanceCounts(),
             'credits' => $student->creditSummary(),
+            'sessions' => $student->sessionHistory(),
         ]);
     }
 }

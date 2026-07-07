@@ -75,7 +75,17 @@ it('renders the progress report for staff', function () {
         ->assertOk()
         ->assertSee('Progress Report')
         ->assertSee('Adam Rahman')
-        ->assertSee('Passing');
+        ->assertSee('Passing')
+        ->assertSee('Session history'); // the session-by-session breakdown
+});
+
+it('lists every session with its per-skill scores, newest first', function () {
+    $history = studentWithScores()->sessionHistory();
+
+    expect($history)->toHaveCount(2)
+        // Newest session (score 5) comes first.
+        ->and($history->first()['scores'][0])->toMatchArray(['skill' => 'Passing', 'score' => 5])
+        ->and($history->last()['scores'][0])->toMatchArray(['skill' => 'Passing', 'score' => 3]);
 });
 
 it('lets a parent view their own child\'s report but not another child\'s', function () {

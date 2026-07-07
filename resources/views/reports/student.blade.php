@@ -124,6 +124,43 @@
                 </tbody>
             </table>
         @endif
+
+        <h2>Session history</h2>
+        @if($sessions->isEmpty())
+            <div class="empty">No recorded sessions yet.</div>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Timeslot</th>
+                        <th>Status</th>
+                        <th>Coach</th>
+                        <th>Scores</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($sessions as $session)
+                        <tr>
+                            <td>{{ $session['date']?->format('j M Y') ?? '—' }}</td>
+                            <td>{{ $session['timeslot'] }}</td>
+                            <td>{{ ucfirst($session['status']) }}</td>
+                            <td>{{ $session['coach'] ?? '—' }}</td>
+                            <td>
+                                @forelse($session['scores'] as $score)
+                                    {{ $score['skill'] }} <strong>{{ $score['score'] }}</strong>@if(! $loop->last) · @endif
+                                @empty
+                                    <span class="muted">—</span>
+                                @endforelse
+                            </td>
+                        </tr>
+                        @if($session['note'])
+                            <tr><td colspan="5" class="muted" style="font-size:.8rem; padding-top:0;">Note: {{ $session['note'] }}</td></tr>
+                        @endif
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
     </div>
 </body>
 </html>
