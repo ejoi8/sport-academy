@@ -29,9 +29,9 @@ php artisan db:seed --class="Database\Seeders\DemoSeeder" --force
 ```
 
 > **Seeder gotcha:** do **not** combine `migrate:fresh --seed` with a later `DemoSeeder` run.
-> `--seed` runs `DatabaseSeeder` → `BaselineSeeder` (a lean 4-program baseline used by the
+> `--seed` runs `DatabaseSeeder` → `BaselineSeeder` (a lean 2-program baseline used by the
 > test suite), and DemoSeeder's catalog then **stacks on top** as duplicate-named programs
-> (BaselineSeeder uses `firstOrCreate`, DemoSeeder doesn't) — you'll see 10 programs, not 6.
+> (BaselineSeeder uses `firstOrCreate`, DemoSeeder doesn't) — you'll see 6 programs, not 4.
 > Use exactly the two commands above for demo data.
 
 **Logins** (all password `password`):
@@ -39,16 +39,16 @@ php artisan db:seed --class="Database\Seeders\DemoSeeder" --force
 | Email | Role |
 |---|---|
 | `admin@admin.com` | super_admin |
-| `coach@academy.test` (Farid), `amir@…`, `lena@…` | coach + super_admin |
-| `parent1@demo.test` … `parent100@demo.test` | parent (no panel access) |
+| `coach@academy.test` (Farid), `amir@…`, `lena@…`, `hafiz@…` | coach + super_admin |
+| `parent1@demo.test`, `parent2@demo.test`, … | parent (no panel access) |
 
-Demo data: 5 programs — **1-on-1** (Wed 18:00), **Group Training** (Sat 09:00),
-**Goalkeeper** (Sun 09:00) recurring weekly, a one-off **Football Clinic** (2nd Saturday
-14:00) — 100 students each, in families of 4 under 100 parents — plus a retired
-**Ramadhan Special** (inactive, last month only). Last month fully recorded; this month
-recorded up to today. A deterministic **scenario layer** (`SC …`-named students on the closed
-Sat 11:00 slot) covers every credit/attendance case — verify it with
-[demo-verification.sql](demo-verification.sql).
+Demo data: the academy's real weekend timetable — **Group** (Sabtu petang, Sat 16:00–18:00) and
+**1-on-1** (Sabtu petang + Ahad pagi, Sun 09:00–11:00) recurring weekly, a one-off **Football
+Clinic**, plus a retired **Ramadhan Special** (inactive, last month only). Each slot gets a cohort
+sized under its capacity (Group ~32, 1-on-1 ~8/slot), in families of 4 under generated parent
+accounts. Last month fully recorded; this month recorded up to today. A deterministic **scenario
+layer** (`SC …`-named students on the closed Sat 11:00 Group slot) covers every credit/attendance
+case — verify it with [demo-verification.sql](demo-verification.sql).
 
 ## Where things live
 
@@ -58,7 +58,9 @@ app/Filament/Resources/<Entity>/       Filament v5 NESTED layout — always:
   Schemas/<Entity>Form.php                form (shared with relation managers via configure() flags)
   Tables/<Entities>Table.php              table
   Pages/…, RelationManagers/…
-app/Filament/Pages/RunTraining.php     the coach recording surface (sole writer of attendance/scores)
+app/Filament/Pages/RunTraining.php     the coach recording surface (the UI + in-memory roster)
+app/Actions/RecordTrainingSession.php  the sole writer of attendance/scores/credits; takes a
+                                         RecordSessionData DTO, returns a RecordSessionResult
 resources/views/filament/pages/        run-training.blade.php + partials/ (recorder, item)
 app/Models/                            Program, Offering, Enrollment, TrainingSession, Attendance, …
 database/seeders/                      BaselineSeeder (tests) · DemoSeeder (rich demo)
@@ -81,6 +83,11 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
   time; the one-off offering is created **inside the Save transaction** (abandoning stages
   nothing). Soft time-overlap warning, never a block.
 - Deleting a saved one-off session also removes its now-empty one-off offering.
+- **Save runs through one action** — the whole write (session + attendances + scores + credit
+  consumption + ad-hoc offering creation + roster pruning) lives in
+  `App\Actions\RecordTrainingSession`, called with a plain `RecordSessionData` and returning a
+  `RecordSessionResult`. The page only builds the DTO and refreshes badges, so a future API (e.g. a
+  Vue frontend) records a session through the exact same writer.
 - What Save writes, exactly: [run-training-save.md](run-training-save.md).
 - Page state is URL-addressable (`?date=YYYY-MM-DD&session=<offering id>`) — refresh-safe and
   bookmarkable. Only `date` and the open session id go in the URL (never roster/search — student
@@ -168,8 +175,9 @@ waiting on a webhook that can never arrive in local dev.
 
 ## Invariants — do not break these
 
-1. **Run Training is the only writer** of attendance, scores, and credit consumption. There is
-   deliberately no Attendance/Score Filament resource.
+1. **One writer of attendance, scores, and credit consumption** — the
+   `App\Actions\RecordTrainingSession` action, called only by Run Training today (and any future
+   API). There is deliberately no Attendance/Score Filament resource.
 2. **Credits are derived, never stored** — `creditsUsed()` counts attendances
    (present/late/absent consume; excused doesn't). No counter columns. Full
    SOP/TNC-facing rules (carry-over, make-ups, over-delivery): see
@@ -187,17 +195,22 @@ waiting on a webhook that can never arrive in local dev.
 | Decision | Status |
 |---|---|
 | Planned sessions / multi-weekday offerings (pre-generated schedules) | **Declined** (2026-07-03) — adds management burden; do not re-propose. Record: [design-planned-sessions.md](design-planned-sessions.md) |
-| Parent experience | **Frontend-only** (public site, later phase). Filament panel is Admin/Coach only. |
-| Payment gateway | **Deferred** to a late phase as an optional, decoupled add-on; `Enrollment.status` (active/pending/overdue) is the manual payment signal meanwhile. |
+| Parent experience | **Shipped** — parents live on the public site (booking funnel + My Family); the Filament panel stays Admin/Coach only. |
+| Payment gateway | **Shipped** — optional, decoupled `ejoi/payment-gateway` add-on (hosted checkout + manual bank-transfer proofs). With no gateway configured, `Enrollment.status` + manual proofs still drive activation. See **Payments** above. |
 | Run Training navigation | Iterated dropdown → date-first → session-first → **date + session accordion** (current). The accordion makes date/roster desync impossible by construction. |
+| Recording write path | **Extracted** to `App\Actions\RecordTrainingSession` — the Livewire page builds a DTO and calls the action, so the write logic is shared/testable and API-ready. |
 | Ad-hoc sessions | Create-on-**Save** (not on start) to avoid orphan one-off offerings. |
 | Cross-program make-ups | **Restricted** (2026-07-05) — make-up credits are same-program only (value mismatch: e.g. a Goalkeeper credit paying a 1-on-1 session); coach can always charge walk-in instead. See credits-policy.md |
-| Monthly offering rollover | Manual button (2026-07-06) — a "Clone to month" bulk action on Catalog → Timeslots clones selected open recurring offerings one month forward (skipping one-offs, inactive programs, and existing matches); never creates or renews Enrollment rows (renewal always requires payment, no auto-billing). Catalog → Timeslots and People → Enrolments now default their Month filter to the current period. See [plan-offering-rollover.md](plan-offering-rollover.md) |
+| Monthly offering rollover | **Shipped** — a "Clone to month" bulk action on Catalog → Timeslots clones selected open recurring offerings one month forward (skipping one-offs, inactive programs, and existing matches); never creates or renews Enrollment rows (renewal always requires payment, no auto-billing). Catalog → Timeslots and People → Enrolments default their Month filter to the current period. |
 
 ## Deferred / known gaps
 
-- **Enrolment guardrails, parent booking funnel, payment gateway** — planned in full detail in
-  [plan-next-features.md](plan-next-features.md) (self-contained; buildable by any agent).
+- **Authorization is all-or-nothing inside the panel** — any staff role reaches every resource. A
+  real `super_admin` gate bypass exists, deliberately carved out so it can *not* skip the delete
+  guardrails. Whether to restrict coaches out of Finance/pricing is an open call — see
+  [review-findings.md](review-findings.md).
+- **Quick Record / Student 360** — a second (student-first) recording flow and a coach-facing
+  student page are planned but not built: [plan-quick-record.md](plan-quick-record.md).
 - **Ad-hoc one-offs appear in Catalog → Timeslots** (0-capacity rows). Cosmetic; an
   `is_ad_hoc` flag + filter would hide them if it starts to grate.
 - **Unused-credits list accumulates across months** (credits never expire) — a period filter

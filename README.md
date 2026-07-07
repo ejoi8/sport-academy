@@ -20,12 +20,10 @@
   direction, kept as a record (Part A shipped; B–D are not a backlog).
 - [Session credits — policy (SOP/TNC source)](docs/credits-policy.md) — the plain-English rules
   for credits, carry-over, and make-ups that Run Training enforces automatically.
-- [Execution plan — next features](docs/plan-next-features.md) — self-contained build plan for
-  enrolment guardrails, the parent booking funnel, and the payment gateway.
+- [Code review — findings & decisions](docs/review-findings.md) — the last review's findings and
+  the decisions taken (all patched).
 - [Execution plan — Quick Record](docs/plan-quick-record.md) — student-first recording menu
-  (side-by-side comparison with Run Training) + coach-facing Student 360 page.
-- [Execution plan — Offering rollover](docs/plan-offering-rollover.md) — a manual "roll forward"
-  button for next month's recurring timeslots, and current-period admin defaults.
+  (side-by-side comparison with Run Training) + coach-facing Student 360 page. **Not yet built.**
 
 ## About Laravel
 

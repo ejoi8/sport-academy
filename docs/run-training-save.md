@@ -1,11 +1,18 @@
 # Run Training — what "Save" writes
 
-Quick reference for how recording a session persists data. **Run Training is the only writer of
-attendance, scores and credit consumption.**
+Quick reference for how recording a session persists data. **Attendance, scores and credit
+consumption have exactly one writer: the `App\Actions\RecordTrainingSession` action.**
 
 The page is a **date → session accordion**: pick a date, every timeslot that runs on it appears
 as a collapsible card (with a Saved / Not-recorded pill), plus a "＋ Create new session" card.
 Expanding a card loads its roster; nothing below is written until **Save**.
+
+On Save, the Livewire page packages its state into a plain **`RecordSessionData`** (offering or
+new-session details + date + coach + roster) and calls `RecordTrainingSession::execute()`, which
+does everything below in one transaction and returns a **`RecordSessionResult`** (the saved
+session + the roster with any new walk-in students' ids filled in, so a re-save reuses them). The
+page keeps only the presentation concerns — badges, notifications, URL state. Any future caller
+(e.g. a JSON API for a Vue frontend) records a session through the same action.
 
 ## Tables written on Save
 

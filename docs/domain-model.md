@@ -76,14 +76,15 @@ Roster on a date = subscribers (offering's enrolments, always shown)
 
 ## Who may write what (data integrity)
 
-The integrity-critical path — **attendance, scores, and credit *consumption*** — is written
-**only by Run Training**. There is deliberately no Attendance or Score resource.
+The integrity-critical path — **attendance, scores, and credit *consumption*** — is written by a
+single action, **`App\Actions\RecordTrainingSession`**, which Run Training calls on Save (and any
+future API would call too). There is deliberately no Attendance or Score resource.
 
 The Filament resources cover the **registration** side only: **Catalog** (Sport / Program /
 Timeslot / Skill) and **People** (Student / Enrolment). Editing an enrolment via a resource
-isn't "bypassing" Run Training — Run Training never created enrolments, it only *reads* them.
-(Guardrails on risky enrolment fields — lock `sessions_included` after attendance, block
-force-delete, audit trail — are planned but deferred while in development.)
+isn't "bypassing" the recorder — it never created enrolments, it only *reads* them. Guardrails on
+risky enrolment fields are **in place**: `sessions_included` / `price_sen` lock once the first
+attendance is recorded, history-destroying deletes are blocked, and enrolment changes are audited.
 
 ## A worked example: Adam, July
 
