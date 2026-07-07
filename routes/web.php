@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Payments\CheckoutController;
 use App\Http\Controllers\Payments\ProofDownloadController;
 use App\Http\Controllers\Payments\ReturnController;
+use App\Http\Controllers\Reports\AttendanceReportController;
 use App\Http\Controllers\Reports\CreditLiabilityReportController;
 use App\Http\Controllers\Reports\EnrollmentsExportController;
 use App\Http\Controllers\Reports\PaymentsExportController;
@@ -53,6 +54,7 @@ Route::middleware('auth')
 Route::middleware('auth')->group(function (): void {
     Route::get('/reports/revenue', RevenueReportController::class)->name('reports.revenue');
     Route::get('/reports/credit-liability', CreditLiabilityReportController::class)->name('reports.credit-liability');
+    Route::get('/reports/attendance', AttendanceReportController::class)->name('reports.attendance');
     Route::get('/reports/enrolments.csv', EnrollmentsExportController::class)->name('reports.enrollments.csv');
     Route::get('/reports/payments.csv', PaymentsExportController::class)->name('reports.payments.csv');
 });

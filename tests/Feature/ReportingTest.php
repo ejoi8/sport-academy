@@ -1,5 +1,6 @@
 <?php
 
+use App\Filament\Pages\Reports\AttendanceReport;
 use App\Filament\Pages\Reports\CreditLiabilityReport;
 use App\Filament\Pages\Reports\RevenueReport;
 use App\Models\Attendance;
@@ -10,6 +11,7 @@ use App\Models\Sport;
 use App\Models\Student;
 use App\Models\TrainingSession;
 use App\Models\User;
+use App\Support\Reporting\AttendanceSummary;
 use App\Support\Reporting\CreditLiabilitySummary;
 use App\Support\Reporting\RevenueSummary;
 use Filament\Facades\Filament;
@@ -35,6 +37,14 @@ function reportParent(): User
 {
     $user = User::factory()->create();
     $user->assignRole(Role::firstOrCreate(['name' => 'parent', 'guard_name' => 'web']));
+
+    return $user;
+}
+
+function reportCoach(): User
+{
+    $user = User::factory()->create();
+    $user->assignRole(Role::firstOrCreate(['name' => 'coach', 'guard_name' => 'web']));
 
     return $user;
 }
@@ -81,6 +91,26 @@ function reportConsume(Enrollment $enrolment, int $count): void
             'status' => 'present',
         ]);
     }
+}
+
+function reportSession(Offering $offering, string $date, ?int $coachId = null): TrainingSession
+{
+    return TrainingSession::create([
+        'offering_id' => $offering->id,
+        'session_date' => $date,
+        'coach_id' => $coachId,
+    ]);
+}
+
+function reportMark(TrainingSession $session, string $status): void
+{
+    $student = Student::create(['name' => fake()->name(), 'is_active' => true]);
+    Attendance::create([
+        'training_session_id' => $session->id,
+        'student_id' => $student->id,
+        'participant_type' => 'walk_in',
+        'status' => $status,
+    ]);
 }
 
 it('summarises revenue as billed = collected + outstanding, broken down by program', function () {
@@ -177,4 +207,84 @@ it('serves the credit-liability sheet and the enrolment/payment CSV exports to s
 
     $this->actingAs(reportParent())->get(route('reports.enrollments.csv'))->assertForbidden();
     $this->actingAs(reportParent())->get(route('reports.credit-liability'))->assertForbidden();
+});
+
+it('summarises attendance: rate over marked, present+late count as attended', function () {
+    $program = reportProgram();
+    $offering = reportOffering($program, now()->format('Y-m'));
+    $date = now()->startOfMonth()->toDateString();
+
+    $session = reportSession($offering, $date);
+    reportMark($session, 'present');
+    reportMark($session, 'present');
+    reportMark($session, 'late');
+    reportMark($session, 'absent');   // no-show
+    reportMark($session, 'excused');  // doesn't count as attended
+
+    $data = AttendanceSummary::for(now()->format('Y-m'));
+
+    // attended = 2 present + 1 late = 3 of 5 marked = 60%
+    expect($data['sessions_delivered'])->toBe(1)
+        ->and($data['attended'])->toBe(3)
+        ->and($data['total_marked'])->toBe(5)
+        ->and($data['attendance_rate'])->toBe(60.0)
+        ->and($data['no_show_rate'])->toBe(20.0)
+        ->and($data['by_program']['Group']['sessions'])->toBe(1);
+});
+
+it('scopes attendance to a single coach when a coach id is given', function () {
+    $program = reportProgram();
+    $offering = reportOffering($program, now()->format('Y-m'));
+    $date = now()->startOfMonth()->toDateString();
+
+    $farid = reportStaff();
+    $lena = reportStaff();
+
+    $sessionA = reportSession($offering, $date, $farid->id);
+    reportMark($sessionA, 'present');
+    reportMark($sessionA, 'present');
+
+    $sessionB = reportSession($offering, now()->startOfMonth()->addDay()->toDateString(), $lena->id);
+    reportMark($sessionB, 'absent');
+
+    // Farid sees only his own session and its two attendances.
+    $faridData = AttendanceSummary::for(now()->format('Y-m'), $farid->id);
+    expect($faridData['sessions_delivered'])->toBe(1)
+        ->and($faridData['total_marked'])->toBe(2)
+        ->and($faridData['attendance_rate'])->toBe(100.0);
+
+    // Admin (no coach filter) sees both sessions.
+    $allData = AttendanceSummary::for(now()->format('Y-m'));
+    expect($allData['sessions_delivered'])->toBe(2)
+        ->and($allData['total_marked'])->toBe(3);
+});
+
+it('gives the attendance report to staff and coaches, but a coach only sees their own', function () {
+    $program = reportProgram();
+    $offering = reportOffering($program, now()->format('Y-m'));
+    $coach = reportCoach();
+
+    // A session the coach led, and one led by someone else.
+    reportMark(reportSession($offering, now()->startOfMonth()->toDateString(), $coach->id), 'present');
+    reportMark(reportSession($offering, now()->startOfMonth()->addDay()->toDateString(), reportStaff()->id), 'absent');
+
+    // Page renders for both roles; blocked for a parent.
+    $this->actingAs(reportStaff());
+    Livewire::test(AttendanceReport::class)->assertOk();
+    expect(AttendanceReport::canAccess())->toBeTrue();
+
+    $this->actingAs($coach);
+    expect(AttendanceReport::canAccess())->toBeTrue();
+
+    $this->actingAs(reportParent());
+    expect(AttendanceReport::canAccess())->toBeFalse();
+
+    // The coach's print sheet is scoped to their one session; the parent is forbidden.
+    $this->actingAs($coach)->get(route('reports.attendance'))->assertOk()->assertSee('Attendance');
+    $this->actingAs($coach)->get(route('reports.attendance', ['format' => 'csv']))->assertOk()->assertDownload();
+    $this->actingAs(reportParent())->get(route('reports.attendance'))->assertForbidden();
+
+    // Coach scoping is enforced server-side: even if a coach passes ?coach=, they see only their own.
+    $data = AttendanceSummary::for(now()->format('Y-m'), $coach->id);
+    expect($data['sessions_delivered'])->toBe(1);
 });
