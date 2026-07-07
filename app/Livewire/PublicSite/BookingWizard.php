@@ -177,7 +177,12 @@ class BookingWizard extends Component
                 ->first();
 
             if ($existing) {
-                $this->addError('submit', 'This child is already booked into that class.');
+                // A soft-deleted (cancelled) enrolment still occupies the unique (student, offering)
+                // slot, so the funnel can't simply re-create one — steer them to staff for re-enrolment
+                // rather than claiming they're currently booked.
+                $this->addError('submit', $existing->trashed()
+                    ? 'This child was previously enrolled in that class — please contact us to re-book.'
+                    : 'This child is already booked into that class.');
 
                 return;
             }
