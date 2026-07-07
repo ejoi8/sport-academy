@@ -1,7 +1,10 @@
 <?php
 
 use App\Filament\Resources\Enrollments\Pages\CreateEnrollment;
+use App\Filament\Resources\Enrollments\Pages\EditEnrollment;
 use App\Filament\Resources\Enrollments\Pages\ListEnrollments;
+use App\Filament\Resources\Enrollments\RelationManagers\AttendancesRelationManager as EnrollmentAttendancesRelationManager;
+use App\Filament\Resources\Enrollments\RelationManagers\PaymentsRelationManager as EnrollmentPaymentsRelationManager;
 use App\Filament\Resources\Students\Pages\CreateStudent;
 use App\Filament\Resources\Students\Pages\EditStudent;
 use App\Filament\Resources\Students\Pages\ListStudents;
@@ -10,6 +13,7 @@ use App\Filament\Resources\Students\RelationManagers\EnrollmentsRelationManager;
 use App\Models\AssessmentScore;
 use App\Models\Attendance;
 use App\Models\Enrollment;
+use App\Models\GatewayPayment;
 use App\Models\Offering;
 use App\Models\Program;
 use App\Models\Skill;
@@ -238,4 +242,46 @@ it('shows a session\'s assessment scores in the read-only view', function () {
 
     // The view's infolist reads the session's scores through this relation.
     expect($attendance->scores()->with('skill')->first()?->skill?->name)->toBe('Passing');
+});
+
+it('lists an enrolment\'s credit-consuming sessions in a read-only relation manager', function () {
+    $student = Student::create(['name' => 'Credit Kid', 'is_active' => true]);
+    $enrolment = Enrollment::create(['student_id' => $student->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    consumeCredits($enrolment, 3);
+
+    Livewire::test(EnrollmentAttendancesRelationManager::class, [
+        'ownerRecord' => $enrolment,
+        'pageClass' => EditEnrollment::class,
+    ])
+        ->assertOk()
+        ->assertCountTableRecords(3);
+});
+
+it('lists an enrolment\'s payments in a read-only relation manager', function () {
+    $student = Student::create(['name' => 'Payer Kid', 'is_active' => true]);
+    $enrolment = Enrollment::create([
+        'student_id' => $student->id,
+        'offering_id' => anOffering()->id,
+        'status' => 'pending',
+        'price_sen' => 12000,
+        'sessions_included' => 4,
+        'source' => 'online',
+        'booking_reference' => 'BK-2026-000777',
+    ]);
+
+    $payment = new GatewayPayment;
+    $payment->forceFill([
+        'gateway' => 'manual',
+        'reference' => $enrolment->booking_reference,
+        'status' => 'pending',
+        'amount_minor' => 12000,
+        'currency' => 'MYR',
+    ])->save();
+
+    Livewire::test(EnrollmentPaymentsRelationManager::class, [
+        'ownerRecord' => $enrolment,
+        'pageClass' => EditEnrollment::class,
+    ])
+        ->assertOk()
+        ->assertCanSeeTableRecords([$payment]);
 });
