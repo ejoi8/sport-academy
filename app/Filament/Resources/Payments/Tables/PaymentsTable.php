@@ -77,6 +77,14 @@ class PaymentsTable
                         'paypal' => 'PayPal',
                     ]),
             ])
+            ->headerActions([
+                Action::make('exportCsv')
+                    ->label('Export CSV')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('gray')
+                    ->url(route('reports.payments.csv'))
+                    ->openUrlInNewTab(),
+            ])
             ->recordActions([
                 Action::make('openEnrollment')
                     ->label('Enrolment')

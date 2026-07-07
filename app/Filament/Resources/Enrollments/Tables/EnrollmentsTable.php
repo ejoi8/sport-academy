@@ -7,6 +7,7 @@ use App\Enums\EnrollmentStatus;
 use App\Filament\Resources\Offerings\OfferingResource;
 use App\Models\Enrollment;
 use App\Support\DeletionGuard;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,6 +15,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -142,6 +144,14 @@ class EnrollmentsTable
                         ? $query->whereHas('offering', fn (Builder $offering): Builder => $offering->where('period', $data['value']))
                         : $query),
                 TrashedFilter::make(),
+            ])
+            ->headerActions([
+                Action::make('exportCsv')
+                    ->label('Export CSV')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('gray')
+                    ->url(route('reports.enrollments.csv'))
+                    ->openUrlInNewTab(),
             ])
             ->recordActions([
                 EditAction::make(),
