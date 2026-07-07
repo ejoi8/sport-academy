@@ -154,6 +154,9 @@ class Student extends Model
     {
         return (int) $this->enrollments()
             ->whereIn('status', ['active', 'pending', 'overdue'])
+            // Only unexpired credits can actually fund a make-up, so only they count as "carried"
+            // — matches liveCreditEnrollment() and Run Training's carry-over query.
+            ->where(fn ($query) => $query->whereNull('credits_expire_at')->orWhereDate('credits_expire_at', '>=', today()))
             ->withCount(['attendances as used_credits' => fn ($query) => $query->whereIn('status', Enrollment::CREDIT_CONSUMING_STATUSES)])
             ->get()
             ->sum(fn (Enrollment $enrollment): int => max(0, $enrollment->sessions_included - $enrollment->used_credits));
