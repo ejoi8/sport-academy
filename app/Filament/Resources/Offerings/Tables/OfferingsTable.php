@@ -74,6 +74,8 @@ class OfferingsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     self::cloneToMonthAction(),
+                    self::setOpenAction(true),
+                    self::setOpenAction(false),
                     DeleteBulkAction::make()
                         ->before(function (DeleteBulkAction $action, Collection $records): void {
                             if ($message = DeletionGuard::firstBlockedMessage($records)) {
@@ -82,6 +84,35 @@ class OfferingsTable
                         }),
                 ]),
             ]);
+    }
+
+    /**
+     * Open or close registration on the selected timeslots in one go. `is_open` gates new bookings
+     * only — it never affects delivery or existing enrolments — so this is safe and fully
+     * reversible (the opposite action flips it back).
+     */
+    private static function setOpenAction(bool $open): BulkAction
+    {
+        return BulkAction::make($open ? 'openRegistration' : 'closeRegistration')
+            ->label($open ? 'Open registration' : 'Close registration')
+            ->icon($open ? Heroicon::OutlinedLockOpen : Heroicon::OutlinedLockClosed)
+            ->color($open ? 'success' : 'danger')
+            ->requiresConfirmation()
+            ->action(function (Collection $records) use ($open): void {
+                // Report only the ones that actually flip, not everything that was selected.
+                $changed = $records->filter(fn (Offering $offering): bool => (bool) $offering->is_open !== $open)->count();
+
+                Offering::whereKey($records->modelKeys())->update([
+                    'is_open' => $open,
+                    'updated_at' => now(),
+                ]);
+
+                Notification::make()
+                    ->success()
+                    ->title($changed.' timeslot(s) '.($open ? 'opened for registration' : 'closed to registration').'.')
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     /**

@@ -290,6 +290,24 @@ it('never creates or touches enrollments when cloning', function () {
     expect(Enrollment::count())->toBe($countBefore);
 });
 
+it('bulk-closes and re-opens registration on selected timeslots', function () {
+    $one = aRecurringOffering();
+    $two = aRecurringOffering();
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('closeRegistration', [$one, $two]);
+
+    expect($one->refresh()->is_open)->toBeFalse()
+        ->and($two->refresh()->is_open)->toBeFalse();
+
+    // Re-opening only the one selected leaves the other closed.
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('openRegistration', [$one]);
+
+    expect($one->refresh()->is_open)->toBeTrue()
+        ->and($two->refresh()->is_open)->toBeFalse();
+});
+
 it('defaults the offerings list to the current period', function () {
     $current = aRecurringOffering();
     $past = aRecurringOffering(period: now()->subMonthNoOverflow()->format('Y-m'));
