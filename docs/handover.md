@@ -29,8 +29,9 @@ php artisan db:seed --class="Database\Seeders\DemoSeeder" --force
 ```
 
 > **Seeder gotcha:** do **not** combine `migrate:fresh --seed` with a later `DemoSeeder` run.
-> `--seed` runs `DatabaseSeeder` → `BaselineSeeder` (a lean 2-program baseline used by the
-> test suite), and DemoSeeder's catalog then **stacks on top** (you'll see 6 programs).
+> `--seed` runs `DatabaseSeeder` → `BaselineSeeder` (a lean 4-program baseline used by the
+> test suite), and DemoSeeder's catalog then **stacks on top** as duplicate-named programs
+> (BaselineSeeder uses `firstOrCreate`, DemoSeeder doesn't) — you'll see 10 programs, not 6.
 > Use exactly the two commands above for demo data.
 
 **Logins** (all password `password`):
@@ -191,6 +192,7 @@ waiting on a webhook that can never arrive in local dev.
 | Run Training navigation | Iterated dropdown → date-first → session-first → **date + session accordion** (current). The accordion makes date/roster desync impossible by construction. |
 | Ad-hoc sessions | Create-on-**Save** (not on start) to avoid orphan one-off offerings. |
 | Cross-program make-ups | **Restricted** (2026-07-05) — make-up credits are same-program only (value mismatch: e.g. a Goalkeeper credit paying a 1-on-1 session); coach can always charge walk-in instead. See credits-policy.md |
+| Monthly offering rollover | Manual button (2026-07-06) — a "Clone to month" bulk action on Catalog → Timeslots clones selected open recurring offerings one month forward (skipping one-offs, inactive programs, and existing matches); never creates or renews Enrollment rows (renewal always requires payment, no auto-billing). Catalog → Timeslots and People → Enrolments now default their Month filter to the current period. See [plan-offering-rollover.md](plan-offering-rollover.md) |
 
 ## Deferred / known gaps
 

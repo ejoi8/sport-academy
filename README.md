@@ -24,6 +24,8 @@
   enrolment guardrails, the parent booking funnel, and the payment gateway.
 - [Execution plan — Quick Record](docs/plan-quick-record.md) — student-first recording menu
   (side-by-side comparison with Run Training) + coach-facing Student 360 page.
+- [Execution plan — Offering rollover](docs/plan-offering-rollover.md) — a manual "roll forward"
+  button for next month's recurring timeslots, and current-period admin defaults.
 
 ## About Laravel
 

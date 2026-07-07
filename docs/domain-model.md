@@ -10,7 +10,7 @@ The booking side was designed to feel like WooCommerce products, monthly.
 | Concept | Model | What it is |
 |---|---|---|
 | Product | **Program** | "Group Training" — holds the *defaults*: monthly price, walk-in fee, `default_sessions`. |
-| Purchasable variation | **Offering** | One month's bookable slot: `Group Training · Wed 6pm · July · RM120 · 4 credits · cap 12`. One per program **per month**. |
+| Purchasable variation | **Offering** | One month's bookable slot: `Group Training · Wed 6pm · July · RM120 · 4 credits · cap 12`. One per program **per month**. Each month's offerings must exist before students can enrol into them — either created by hand or via the "Clone to month" bulk action on Catalog → Timeslots (schedule only, never touches enrolments; see [handover.md](handover.md) decisions log). |
 | The order / purchase | **Enrolment** | Student X bought that offering (status + **price snapshot** + **credits snapshot**). |
 | Fulfilment | **TrainingSession → Attendance** | A session ran on a date; the student showed up (consuming a credit) and was scored. |
 | The rubric | **SkillCategory → Skill** | The skills a coach scores (Technical → Passing). |
