@@ -7,6 +7,7 @@ use App\Filament\Resources\Offerings\RelationManagers\EnrollmentsRelationManager
 use App\Filament\Resources\Programs\Pages\CreateProgram;
 use App\Filament\Resources\Programs\Pages\EditProgram;
 use App\Filament\Resources\Programs\RelationManagers\OfferingsRelationManager;
+use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
 use App\Models\Sport;
@@ -179,3 +180,150 @@ it('enrols a student through the offering relation manager', function () {
         'sessions_included' => 5,
     ]);
 });
+
+it('clones a selected recurring timeslot into the target month', function () {
+    $offering = aRecurringOffering();
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    $this->assertDatabaseHas('offerings', [
+        'program_id' => $offering->program_id,
+        'period' => $toPeriod,
+        'schedule_type' => 'recurring',
+        'weekday' => $offering->weekday,
+        'start_time' => $offering->start_time,
+        'capacity' => $offering->capacity,
+        'price_sen' => $offering->price_sen,
+    ]);
+});
+
+it('never clones a one-off offering', function () {
+    $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
+    $program = Program::create(['sport_id' => $sport->id, 'name' => 'Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]);
+    $offering = Offering::create([
+        'program_id' => $program->id,
+        'period' => now()->format('Y-m'),
+        'schedule_type' => 'one_off',
+        'specific_date' => now()->startOfMonth()->addDays(10)->toDateString(),
+        'start_time' => '09:00',
+        'end_time' => '12:00',
+        'capacity' => 20,
+        'session_count' => 1,
+        'price_sen' => 9000,
+        'is_open' => true,
+    ]);
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    expect(Offering::where('program_id', $program->id)->where('period', $toPeriod)->exists())->toBeFalse();
+});
+
+it('never clones an offering belonging to an inactive program', function () {
+    $offering = aRecurringOffering(programIsActive: false);
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    expect(Offering::where('program_id', $offering->program_id)->where('period', $toPeriod)->exists())->toBeFalse();
+});
+
+it('is idempotent: running the clone twice creates no duplicate', function () {
+    $offering = aRecurringOffering();
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod])
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    expect(Offering::where('program_id', $offering->program_id)
+        ->where('period', $toPeriod)
+        ->where('weekday', $offering->weekday)
+        ->where('start_time', $offering->start_time)
+        ->count())->toBe(1);
+});
+
+it('does not skip a target offering that exists at a different time', function () {
+    $offering = aRecurringOffering(weekday: 3, startTime: '18:00');
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+
+    // A different timeslot for the same program already exists next month (the "second team" case).
+    Offering::create([
+        'program_id' => $offering->program_id,
+        'period' => $toPeriod,
+        'schedule_type' => 'recurring',
+        'weekday' => 5,
+        'start_time' => '10:00',
+        'end_time' => '11:30',
+        'capacity' => $offering->capacity,
+        'session_count' => $offering->session_count,
+        'price_sen' => $offering->price_sen,
+        'is_open' => true,
+    ]);
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    expect(Offering::where('program_id', $offering->program_id)->where('period', $toPeriod)->count())->toBe(2);
+});
+
+it('never creates or touches enrollments when cloning', function () {
+    $offering = aRecurringOffering();
+    $student = Student::create(['name' => 'Kid A', 'is_active' => true]);
+    Enrollment::create([
+        'offering_id' => $offering->id,
+        'student_id' => $student->id,
+        'status' => 'active',
+        'price_sen' => $offering->price_sen,
+        'sessions_included' => $offering->session_count,
+    ]);
+    $toPeriod = now()->addMonthNoOverflow()->format('Y-m');
+    $countBefore = Enrollment::count();
+
+    Livewire::test(ListOfferings::class)
+        ->callTableBulkAction('cloneToMonth', [$offering], ['period' => $toPeriod]);
+
+    expect(Enrollment::count())->toBe($countBefore);
+});
+
+it('defaults the offerings list to the current period', function () {
+    $current = aRecurringOffering();
+    $past = aRecurringOffering(period: now()->subMonthNoOverflow()->format('Y-m'));
+
+    Livewire::test(ListOfferings::class)
+        ->assertCanSeeTableRecords([$current])
+        ->assertCanNotSeeTableRecords([$past]);
+});
+
+function aRecurringOffering(
+    ?string $period = null,
+    int $weekday = 3,
+    string $startTime = '18:00',
+    bool $programIsActive = true,
+): Offering {
+    $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
+    $program = Program::create([
+        'sport_id' => $sport->id,
+        'name' => 'Group',
+        'base_price_sen' => 12000,
+        'walk_in_fee_sen' => 4000,
+        'is_active' => $programIsActive,
+    ]);
+
+    return Offering::create([
+        'program_id' => $program->id,
+        'period' => $period ?? now()->format('Y-m'),
+        'schedule_type' => 'recurring',
+        'weekday' => $weekday,
+        'start_time' => $startTime,
+        'end_time' => '19:30',
+        'capacity' => 12,
+        'session_count' => 5,
+        'price_sen' => 12000,
+        'is_open' => true,
+    ]);
+}

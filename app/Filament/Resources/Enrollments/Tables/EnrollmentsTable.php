@@ -137,6 +137,7 @@ class EnrollmentsTable
                 SelectFilter::make('period')
                     ->label('Month')
                     ->options(OfferingResource::monthOptions())
+                    ->default(now()->format('Y-m'))
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->whereHas('offering', fn (Builder $offering): Builder => $offering->where('period', $data['value']))
                         : $query),

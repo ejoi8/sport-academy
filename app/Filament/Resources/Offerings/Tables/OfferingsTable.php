@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Offerings\Tables;
 
+use App\Enums\ScheduleType;
 use App\Filament\Resources\Offerings\OfferingResource;
 use App\Models\Offering;
 use App\Support\DeletionGuard;
@@ -63,7 +64,8 @@ class OfferingsTable
                 SelectFilter::make('program')
                     ->relationship('program', 'name'),
                 SelectFilter::make('period')
-                    ->options(OfferingResource::monthOptions()),
+                    ->options(OfferingResource::monthOptions())
+                    ->default(now()->format('Y-m')),
                 TernaryFilter::make('is_open'),
             ])
             ->recordActions([
@@ -84,7 +86,12 @@ class OfferingsTable
 
     /**
      * Copy the selected timeslots into another month (skipping any that already exist there),
-     * so an admin can roll last month's schedule forward in one click.
+     * so an admin can roll a month's schedule forward without recreating every timeslot by hand.
+     * Defaults to next month — the common "roll this month forward" case needs no changes, just
+     * select-all + confirm. One-off sessions and retired (inactive) programs are never cloned:
+     * a one-off's specific_date wouldn't make sense in another month, and a retired program's
+     * class should not be silently resurrected. This never touches enrolments — only the
+     * schedule shell (day/time/capacity/price/coach) is copied.
      */
     private static function cloneToMonthAction(): BulkAction
     {
@@ -95,13 +102,29 @@ class OfferingsTable
                 Select::make('period')
                     ->label('Target month')
                     ->options(OfferingResource::monthOptions())
+                    ->default(now()->addMonthNoOverflow()->format('Y-m'))
                     ->required()
                     ->native(false),
             ])
             ->action(function (Collection $records, array $data): void {
                 $created = 0;
+                $skippedExisting = 0;
+                $skippedOneOff = 0;
+                $skippedInactive = 0;
 
                 foreach ($records as $offering) {
+                    if ($offering->schedule_type === ScheduleType::OneOff) {
+                        $skippedOneOff++;
+
+                        continue;
+                    }
+
+                    if (! $offering->program?->is_active) {
+                        $skippedInactive++;
+
+                        continue;
+                    }
+
                     $alreadyThere = Offering::query()
                         ->where('program_id', $offering->program_id)
                         ->where('period', $data['period'])
@@ -111,18 +134,35 @@ class OfferingsTable
                         ->exists();
 
                     if ($alreadyThere) {
+                        $skippedExisting++;
+
                         continue;
                     }
 
-                    $copy = $offering->replicate();
+                    // Exclude the enrollments_count aggregate this table's query attaches via
+                    // ->counts('enrollments') — replicate() copies raw attributes verbatim, and
+                    // that column doesn't exist on the offerings table.
+                    $copy = $offering->replicate(['enrollments_count']);
                     $copy->period = $data['period'];
                     $copy->save();
                     $created++;
                 }
 
+                $message = $created.' timeslot(s) cloned to '.Carbon::parse($data['period'].'-01')->format('F Y').'.';
+
+                $skips = array_filter([
+                    $skippedExisting > 0 ? $skippedExisting.' already existed' : null,
+                    $skippedOneOff > 0 ? $skippedOneOff.' one-off (never cloned)' : null,
+                    $skippedInactive > 0 ? $skippedInactive.' inactive program' : null,
+                ]);
+
+                if ($skips !== []) {
+                    $message .= ' Skipped: '.implode(', ', $skips).'.';
+                }
+
                 Notification::make()
                     ->success()
-                    ->title($created.' timeslot(s) cloned to '.Carbon::parse($data['period'].'-01')->format('F Y'))
+                    ->title($message)
                     ->send();
             })
             ->deselectRecordsAfterCompletion();

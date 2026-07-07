@@ -34,14 +34,14 @@ beforeEach(function () {
     $this->actingAs($admin);
 });
 
-function anOffering(): Offering
+function anOffering(?string $period = null): Offering
 {
     $sport = Sport::create(['name' => 'Football', 'is_active' => true]);
     $program = Program::create(['sport_id' => $sport->id, 'name' => 'Group', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 4000, 'default_sessions' => 4]);
 
     return Offering::create([
         'program_id' => $program->id,
-        'period' => now()->format('Y-m'),
+        'period' => $period ?? now()->format('Y-m'),
         'schedule_type' => 'recurring',
         'weekday' => 3,
         'start_time' => '18:00',
@@ -187,6 +187,18 @@ it('filters enrolments by the number of sessions attended', function () {
         ->filterTable('attended', ['operator' => 'gte', 'count' => 2])
         ->assertCanSeeTableRecords([$eTwo])
         ->assertCanNotSeeTableRecords([$eNone]);
+});
+
+it('defaults the enrolments list to the current period', function () {
+    $current = Student::create(['name' => 'Current month', 'is_active' => true]);
+    $past = Student::create(['name' => 'Past month', 'is_active' => true]);
+
+    $eCurrent = Enrollment::create(['student_id' => $current->id, 'offering_id' => anOffering()->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+    $ePast = Enrollment::create(['student_id' => $past->id, 'offering_id' => anOffering(now()->subMonthNoOverflow()->format('Y-m'))->id, 'status' => 'active', 'price_sen' => 12000, 'sessions_included' => 4]);
+
+    Livewire::test(ListEnrollments::class)
+        ->assertCanSeeTableRecords([$eCurrent])
+        ->assertCanNotSeeTableRecords([$ePast]);
 });
 
 it('lists a student\'s attended sessions in a read-only relation manager', function () {
