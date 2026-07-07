@@ -39,4 +39,14 @@ return [
     ],
 
     'score' => ['min' => 1, 'max' => 5],
+
+    // Public-site contact details. Placeholder values — update with the academy's real
+    // numbers/address (or set the env keys if they differ per environment).
+    'contact' => [
+        'phone' => env('ACADEMY_PHONE', '+60 12-345 6789'),
+        'whatsapp' => env('ACADEMY_WHATSAPP', '60123456789'), // digits only, for wa.me links
+        'email' => env('ACADEMY_EMAIL', 'hello@footballacademy.my'),
+        'address' => env('ACADEMY_ADDRESS', 'Kompleks Sukan Putrajaya, Presint 5, Putrajaya'),
+        'hours' => env('ACADEMY_HOURS', 'Sat–Sun · 8am–7pm'),
+    ],
 ];

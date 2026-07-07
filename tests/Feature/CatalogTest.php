@@ -345,3 +345,10 @@ function aRecurringOffering(
         'is_open' => true,
     ]);
 }
+
+it('maps program names to a friendly booking emoji', function () {
+    expect((new Program(['name' => 'Goalkeeper School']))->emoji())->toBe('🧤')
+        ->and((new Program(['name' => '1-on-1 Coaching']))->emoji())->toBe('🎯')
+        ->and((new Program(['name' => 'Football Clinic']))->emoji())->toBe('🏆')
+        ->and((new Program(['name' => 'Group Training']))->emoji())->toBe('⚽');
+});

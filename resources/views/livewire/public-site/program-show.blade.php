@@ -1,14 +1,22 @@
 <div class="space-y-8">
-    <section class="fa-card p-6 sm:p-7">
-        <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div class="max-w-3xl">
-                <a href="{{ route('home') }}" class="text-sm font-semibold text-slate-500 hover:text-blue-700">← Programs</a>
-                <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">{{ $program->name }}</h1>
-                <p class="mt-3 text-sm leading-6 text-slate-500 sm:text-base">{{ $program->description ?: 'Monthly academy training with attendance tracking and progress scoring.' }}</p>
+    @php($theme = $program->theme())
+    <section class="fa-card overflow-hidden">
+        <div class="grid gap-0 sm:grid-cols-[auto_1fr]">
+            <div class="fa-grain relative min-h-[160px] sm:w-60" style="background:linear-gradient(155deg,{{ $theme['from'] }},{{ $theme['to'] }})">
+                <x-program-art :seed="$program->id"/>
             </div>
-            <div class="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4">
-                <p class="text-xs font-bold uppercase tracking-wide text-blue-700">Walk-in fee</p>
-                <p class="mt-2 text-2xl font-extrabold text-blue-900">RM{{ number_format($program->walk_in_fee_sen / 100, 2) }}</p>
+            <div class="flex flex-col justify-between gap-5 p-6 sm:p-7">
+                <div>
+                    <a href="{{ route('home') }}" class="text-sm font-semibold text-slate-500 hover:text-blue-700">← Programs</a>
+                    <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">{{ $program->name }}</h1>
+                    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">{{ $program->description ?: 'Monthly academy training with attendance tracking and progress scoring.' }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <span class="fa-pill">🎟️ {{ $program->default_sessions }} sessions / month</span>
+                    <span class="fa-pill">💳 Walk-in RM{{ number_format($program->walk_in_fee_sen / 100, 0) }}</span>
+                    <span class="fa-pill">📈 Attendance &amp; skill scores tracked</span>
+                    <span class="fa-pill">♻️ Unused credits carry over</span>
+                </div>
             </div>
         </div>
     </section>
