@@ -2,11 +2,11 @@
 
 namespace App\Filament\Pages;
 
+use App\Actions\RecordSessionData;
+use App\Actions\RecordTrainingSession;
 use App\Enums\AttendanceStatus;
 use App\Enums\ParticipantType;
 use App\Enums\ScheduleType;
-use App\Models\AssessmentScore;
-use App\Models\Attendance;
 use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
@@ -21,7 +21,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
@@ -269,29 +268,6 @@ class RunTraining extends Page
     {
         $this->date = today()->toDateString();
         $this->updatedDate();
-    }
-
-    /**
-     * Create the one-off timeslot for a staged new session, from the chosen program + time. Called
-     * only from save(), inside its transaction, so nothing is written for an abandoned session.
-     */
-    protected function createAdHocOffering(): Offering
-    {
-        $program = Program::findOrFail($this->adHocProgramId);
-
-        return Offering::create([
-            'program_id' => $program->id,
-            'period' => Carbon::parse($this->date)->format('Y-m'),
-            'schedule_type' => ScheduleType::OneOff->value,
-            'specific_date' => $this->date,
-            'start_time' => $this->adHocTime,
-            'end_time' => $this->adHocEndTime !== '' ? $this->adHocEndTime : null,
-            'capacity' => 0,
-            'session_count' => $program->default_sessions,
-            'price_sen' => $program->base_price_sen,
-            'default_coach_id' => $this->headCoachId,
-            'is_open' => true,
-        ]);
     }
 
     public function discard(): void
@@ -718,7 +694,7 @@ class RunTraining extends Page
         Notification::make()->success()->title('Coach added')->send();
     }
 
-    public function save(): void
+    public function save(RecordTrainingSession $recorder): void
     {
         if ($this->creatingSession) {
             // A staged new session must name its program + time before it can be written.
@@ -745,64 +721,15 @@ class RunTraining extends Page
             return;
         }
 
-        // Captured up front: if the transaction below throws, the DB rolls back but these two
-        // properties would otherwise keep the rolled-back (e.g. newly created ad-hoc) offering id.
-        $originalOfferingId = $this->offeringId;
-        $originalCreating = $this->creatingSession;
+        // The whole write lives in RecordTrainingSession (the one writer of attendance/scores/
+        // credits). If it throws, its transaction rolls back and we've changed nothing here yet.
+        $result = $recorder->execute($this->toRecordData());
 
-        try {
-            DB::transaction(function (): void {
-                // Staging a new session: create its one-off timeslot now, in the same transaction as the
-                // session — so an abandoned session (never saved) leaves no orphan timeslot behind.
-                if ($this->creatingSession) {
-                    $this->offeringId = $this->createAdHocOffering()->id;
-                    $this->creatingSession = false;
-                }
-
-                $session = TrainingSession::firstOrCreate(
-                    ['offering_id' => $this->offeringId, 'session_date' => $this->date],
-                    ['coach_id' => $this->headCoachId, 'created_by' => Auth::id()],
-                );
-
-                // Keep the session's lead coach aligned with the timeslot's head coach.
-                if ($session->coach_id !== $this->headCoachId) {
-                    $session->update(['coach_id' => $this->headCoachId]);
-                }
-
-                // Write one attendance row per roster entry, remembering each id.
-                $attendanceIdByStudent = [];
-
-                foreach ($this->roster as $key => $row) {
-                    $studentId = $this->resolveStudentId($key, $row);
-                    $attendance = $this->writeAttendance($session, $studentId, $row);
-                    $attendanceIdByStudent[$studentId] = $attendance->id;
-                }
-
-                // Replace this session's rubric scores in just two statements — one delete then
-                // one bulk insert — instead of a query per player per skill.
-                AssessmentScore::query()
-                    ->whereIn('attendance_id', array_values($attendanceIdByStudent))
-                    ->delete();
-
-                $scoreRows = $this->buildScoreRows($attendanceIdByStudent);
-
-                if ($scoreRows !== []) {
-                    AssessmentScore::insert($scoreRows);
-                }
-
-                // Remove anyone no longer on the roster (their scores cascade away).
-                Attendance::query()
-                    ->where('training_session_id', $session->id)
-                    ->whereNotIn('student_id', array_keys($attendanceIdByStudent))
-                    ->delete();
-            });
-        } catch (\Throwable $e) {
-            $this->offeringId = $originalOfferingId;
-            $this->creatingSession = $originalCreating;
-
-            throw $e;
-        }
-
+        // Adopt what was written: the offering id (a new ad-hoc one is created inside execute) and
+        // the roster with any new walk-in students' ids filled in, so a re-save reuses them.
+        $this->offeringId = $result->session->offering_id;
+        $this->roster = $result->roster;
+        $this->creatingSession = false;
         $this->reset('adHocProgramId', 'adHocTime', 'adHocEndTime');
         $this->dirty = false;
         $this->savedSessionExists = true;
@@ -820,6 +747,35 @@ class RunTraining extends Page
         }
 
         $notification->send();
+    }
+
+    /**
+     * Package the current screen state into the framework-agnostic input the recorder expects —
+     * "record into this existing timeslot" or "record a brand-new one-off session".
+     */
+    protected function toRecordData(): RecordSessionData
+    {
+        $markedBy = (int) Auth::id();
+
+        if ($this->creatingSession) {
+            return RecordSessionData::forNewSession(
+                programId: (int) $this->adHocProgramId,
+                startTime: $this->adHocTime,
+                endTime: $this->adHocEndTime !== '' ? $this->adHocEndTime : null,
+                date: $this->date,
+                coachId: $this->headCoachId,
+                markedBy: $markedBy,
+                roster: $this->roster,
+            );
+        }
+
+        return RecordSessionData::forExisting(
+            offeringId: (int) $this->offeringId,
+            date: $this->date,
+            coachId: $this->headCoachId,
+            markedBy: $markedBy,
+            roster: $this->roster,
+        );
     }
 
     /**
@@ -851,135 +807,6 @@ class RunTraining extends Page
         }
 
         return $enrollments->filter(fn (Enrollment $enrollment): bool => (int) $enrollment->used_credits > $enrollment->sessions_included)->count();
-    }
-
-    /**
-     * Return the student id for a roster row, creating a new walk-in student the
-     * first time it is saved (reusing an existing student that matches the IC).
-     *
-     * @param  array<string, mixed>  $row
-     */
-    protected function resolveStudentId(string $key, array $row): int
-    {
-        if (! empty($row['student_id'])) {
-            return (int) $row['student_id'];
-        }
-
-        $ic = trim((string) ($row['ic'] ?? ''));
-        $existing = $ic !== '' ? Student::where('ic_number', $ic)->first() : null;
-
-        $studentId = $existing?->id ?? Student::create([
-            'name' => $row['name'],
-            'guardian_phone' => $row['phone'] ?? null,
-            'ic_number' => $ic !== '' ? $ic : null,
-            'is_active' => true,
-        ])->id;
-
-        // Remember it so a second save does not create the student again.
-        $this->roster[$key]['student_id'] = $studentId;
-
-        return (int) $studentId;
-    }
-
-    /**
-     * Create or update the attendance row for one player in this session.
-     *
-     * @param  array<string, mixed>  $row
-     */
-    protected function writeAttendance(TrainingSession $session, int $studentId, array $row): Attendance
-    {
-        $isWalkIn = $row['type'] === ParticipantType::WalkIn->value;
-        $isAbsent = $this->isAbsentStatus($row['status']);
-
-        $attendance = Attendance::firstOrNew([
-            'training_session_id' => $session->id,
-            'student_id' => $studentId,
-        ]);
-
-        $attendance->fill([
-            'participant_type' => $row['type'],
-            'status' => $row['status'],
-            'coach_id' => ! empty($row['coach_id']) ? (int) $row['coach_id'] : null,
-            // A walk-in only pays a fee when they actually attended.
-            'walk_in_fee_sen' => ($isWalkIn && ! $isAbsent) ? ($row['fee_sen'] ?? null) : null,
-            'note' => filled($row['note'] ?? null) ? $row['note'] : null,
-            'marked_by' => Auth::id(),
-            // The credit pool this consumes: own enrolment (enrolled), a live-credit pool
-            // (make-up) or none (walk-in). The pool resolved when the row was added is kept
-            // (roster rows already carry it in $row['enrollment_id']); a fresh resolve is only
-            // a fallback for rows that somehow arrive without one.
-            'enrollment_id' => $isWalkIn ? null : ($attendance->enrollment_id ?? $row['enrollment_id'] ?? $this->resolveEnrollmentId($studentId, $row['type'])),
-        ]);
-
-        $attendance->save();
-
-        return $attendance;
-    }
-
-    /**
-     * The enrolment whose session credit an attendance consumes: the student's enrolment in
-     * this timeslot (enrolled), their oldest live-credit pool (make-up), or none (walk-in).
-     */
-    protected function resolveEnrollmentId(int $studentId, string $type): ?int
-    {
-        if ($type === ParticipantType::Enrolled->value) {
-            return Enrollment::query()
-                ->where('offering_id', $this->offeringId)
-                ->where('student_id', $studentId)
-                ->value('id');
-        }
-
-        if ($type === ParticipantType::MakeUp->value) {
-            return Student::find($studentId)?->liveCreditEnrollment($this->currentProgramId(), $this->currentPeriod())?->id;
-        }
-
-        return null;
-    }
-
-    /**
-     * Build the rubric score rows to bulk-insert. Absent players and cleared
-     * pills contribute nothing, so they are simply left out.
-     *
-     * @param  array<int, int>  $attendanceIdByStudent  student id => attendance id
-     * @return array<int, array<string, mixed>>
-     */
-    protected function buildScoreRows(array $attendanceIdByStudent): array
-    {
-        $now = now();
-        $rows = [];
-
-        foreach ($this->roster as $row) {
-            if ($this->isAbsentStatus($row['status'])) {
-                continue;
-            }
-
-            $attendanceId = $attendanceIdByStudent[$row['student_id']] ?? null;
-
-            if (! $attendanceId) {
-                continue;
-            }
-
-            foreach ($row['scores'] as $skillId => $score) {
-                if (is_null($score)) {
-                    continue;
-                }
-
-                $rows[] = [
-                    'attendance_id' => $attendanceId,
-                    'skill_id' => (int) $skillId,
-                    'score' => (int) $score,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    protected function isAbsentStatus(string $status): bool
-    {
-        return in_array($status, [AttendanceStatus::Absent->value, AttendanceStatus::Excused->value], true);
     }
 
     public function deleteSession(): void
