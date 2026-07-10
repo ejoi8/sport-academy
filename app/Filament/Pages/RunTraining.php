@@ -38,6 +38,13 @@ class RunTraining extends Page
 
     protected static ?string $title = 'Run Training';
 
+    // The page renders its own compact app-bar (date nav, Today, help), so suppress Filament's
+    // default page heading to avoid a duplicate "Run Training" title above it.
+    public function getHeading(): string
+    {
+        return '';
+    }
+
     // The open session's id, synced to `?session=` so a card is deep-linkable. Only the id is
     // ever exposed — never roster contents (student names must never reach the URL or logs).
     #[Url(as: 'session', history: false)]
