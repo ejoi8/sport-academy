@@ -1,9 +1,54 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
+        @php($appName = config('app.name') ?: 'Football Academy')
+        @php($pageTitle = ($title ?? null) ? $title.' · '.$appName : $appName)
+        @php($pageDescription = trim($description ?? 'Professional football training for kids — Group, 1-on-1 and Goalkeeper coaching with tracked skill progress and easy online booking.'))
+        @php($canonicalUrl = url()->current())
+        @php($ogImage = ($ogImage ?? null) ?: collect(['og-image.png', 'og-image.jpg'])->first(fn ($f) => file_exists(public_path($f))))
+        @php($ogImage = $ogImage ? (\Illuminate\Support\Str::startsWith($ogImage, 'http') ? $ogImage : asset($ogImage)) : null)
+
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ $title ? $title.' · '.config('app.name', 'Football Academy') : config('app.name', 'Football Academy') }}</title>
+        <meta name="theme-color" content="#1d4ed8">
+
+        <title>{{ $pageTitle }}</title>
+        <meta name="description" content="{{ $pageDescription }}">
+        <meta name="robots" content="{{ ($noindex ?? false) ? 'noindex, follow' : 'index, follow' }}">
+        <link rel="canonical" href="{{ $canonicalUrl }}">
+        <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+
+        {{-- Open Graph --}}
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="{{ $appName }}">
+        <meta property="og:title" content="{{ $pageTitle }}">
+        <meta property="og:description" content="{{ $pageDescription }}">
+        <meta property="og:url" content="{{ $canonicalUrl }}">
+        @if($ogImage)
+            <meta property="og:image" content="{{ $ogImage }}">
+            <meta property="og:image:alt" content="{{ $appName }}">
+        @endif
+
+        {{-- Twitter Card --}}
+        <meta name="twitter:card" content="{{ $ogImage ? 'summary_large_image' : 'summary' }}">
+        <meta name="twitter:title" content="{{ $pageTitle }}">
+        <meta name="twitter:description" content="{{ $pageDescription }}">
+        @if($ogImage)<meta name="twitter:image" content="{{ $ogImage }}">@endif
+
+        {{-- Structured data: the academy as a sports activity provider --}}
+        <script type="application/ld+json">
+            {!! json_encode(array_filter([
+                '@context' => 'https://schema.org',
+                '@type' => 'SportsActivityLocation',
+                'name' => $appName,
+                'description' => $pageDescription,
+                'url' => url('/'),
+                'sport' => 'Soccer',
+                'image' => $ogImage,
+                'telephone' => config('academy.contact.phone'),
+            ], fn ($value) => filled($value)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
+        </script>
+
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
         <style>[x-cloak]{ display:none !important; }</style>

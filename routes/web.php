@@ -13,12 +13,16 @@ use App\Http\Controllers\Reports\EnrollmentsExportController;
 use App\Http\Controllers\Reports\PaymentsExportController;
 use App\Http\Controllers\Reports\ProgressReportController;
 use App\Http\Controllers\Reports\RevenueReportController;
+use App\Http\Controllers\SeoController;
 use App\Http\Controllers\StudentReportController;
 use App\Livewire\PublicSite\BookingWizard;
 use App\Livewire\PublicSite\FamilyDashboard;
 use App\Livewire\PublicSite\ProgramBrowser;
 use App\Livewire\PublicSite\ProgramShow;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/robots.txt', [SeoController::class, 'robots']);
+Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
 
 Route::get('/', ProgramBrowser::class)->name('home');
 Route::get('/programs/{program}', ProgramShow::class)->name('programs.show');

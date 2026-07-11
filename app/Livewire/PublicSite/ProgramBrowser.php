@@ -40,7 +40,8 @@ class ProgramBrowser extends Component
             ] : null,
             'contact' => config('academy.contact'),
         ])->layout('layouts.public', [
-            'title' => 'Football Academy',
+            'title' => 'Kids football training & coaching',
+            'description' => 'Register your child for professional football training — Group, 1-on-1 and Goalkeeper coaching, with tracked skill progress, honest reports and easy online booking.',
         ]);
     }
 }

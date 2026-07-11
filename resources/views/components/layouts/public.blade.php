@@ -1,7 +1,9 @@
-@props(['title' => null])
+@props(['title' => null, 'description' => null, 'ogImage' => null, 'noindex' => false])
 
-@php
-    $title = $title;
-@endphp
-
-@include('layouts.public', ['title' => $title, 'slot' => $slot])
+@include('layouts.public', [
+    'title' => $title,
+    'description' => $description,
+    'ogImage' => $ogImage,
+    'noindex' => $noindex,
+    'slot' => $slot,
+])

@@ -308,6 +308,7 @@ class BookingWizard extends Component
             'gatewayOptions' => PaymentInstructions::hostedGatewayOptions(),
         ])->layout('layouts.public', [
             'title' => 'Book '.$this->offering->program->name,
+            'noindex' => true, // transactional booking flow — not a landing page
         ]);
     }
 }

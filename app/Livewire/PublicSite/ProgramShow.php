@@ -30,6 +30,11 @@ class ProgramShow extends Component
     {
         return view('livewire.public-site.program-show')->layout('layouts.public', [
             'title' => $this->program->name,
+            'description' => \Illuminate\Support\Str::limit(
+                trim(strip_tags((string) $this->program->description))
+                    ?: $this->program->name.' football training at '.(config('app.name') ?: 'our academy').' — 4 sessions a month with tracked skill progress and easy online booking.',
+                160,
+            ),
         ]);
     }
 }

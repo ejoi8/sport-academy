@@ -32,6 +32,7 @@ class FamilyDashboard extends Component
             'defaultGateway' => PaymentInstructions::defaultHostedGateway(),
         ])->layout('layouts.public', [
             'title' => 'My Family',
+            'noindex' => true, // private, per-parent — keep it out of search results
         ]);
     }
 }
