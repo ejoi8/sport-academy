@@ -152,6 +152,14 @@
     .rt-histrow .dt{ font-weight:800; font-size:.84rem; }
     .rt-histrow .sl{ font-size:.72rem; color:var(--mut); }
 
+    /* mini bar chart (reports) — CSS-only columns, no chart lib */
+    .rt-trend{ display:flex; align-items:flex-end; gap:.5rem; height:7.5rem; }
+    .rt-trend .bar{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:.25rem; height:100%; min-width:0; }
+    .rt-trend .val{ font-size:.62rem; font-weight:800; color:var(--sub); font-variant-numeric:tabular-nums; }
+    .rt-trend .col{ width:100%; flex:1; display:flex; align-items:flex-end; background:var(--soft); border-radius:.5rem .5rem 0 0; overflow:hidden; }
+    .rt-trend .fill{ width:100%; background-image:linear-gradient(to top,var(--ac),var(--ac2)); border-radius:.5rem .5rem 0 0; min-height:2px; }
+    .rt-trend .lbl{ font-size:.56rem; color:var(--mut); font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+
     /* ---------- add / floating ---------- */
     .rt-addbtn{ display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%; padding:.8rem; border:1.5px dashed var(--bs); border-radius:1rem; background:var(--bg); color:var(--ac2); font-weight:800; font-size:.85rem; cursor:pointer; }
 
@@ -231,6 +239,10 @@
             <a href="{{ \App\Filament\Pages\Students::getUrl() }}" wire:navigate class="rt-tab {{ $active === 'students' ? 'on' : '' }}" @if($active === 'students') aria-current="page" @endif>
                 <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0111 0M16 5.5a3 3 0 010 5.6M18 20a5.5 5.5 0 00-3-4.9"/></svg>
                 Students
+            </a>
+            <a href="{{ \App\Filament\Pages\CoachReports::getUrl() }}" wire:navigate class="rt-tab {{ $active === 'reports' ? 'on' : '' }}" @if($active === 'reports') aria-current="page" @endif>
+                <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
+                Reports
             </a>
         </nav>
     @endif
