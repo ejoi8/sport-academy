@@ -5,15 +5,16 @@
     @php($overall = $this->overallAverage)
     @php($maxTrend = 5)
 
-    <x-coach-shell active="reports" :tabs="true">
+    {{-- Reached from Home's "See full report" — a drill-down, so no bottom tabs; Back returns Home. --}}
+    <x-coach-shell active="home" :tabs="false">
         <div class="rt-bar">
+            <a href="{{ \App\Filament\Pages\CoachHome::getUrl() }}" wire:navigate class="rt-iconbtn" title="Back to home" aria-label="Back">
+                <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+            </a>
             <div style="flex:1; min-width:0;">
                 <div class="rt-crumb">{{ $this->periodLabel() }}</div>
-                <h1 style="font-size:1.15rem;">Reports</h1>
+                <h1 style="font-size:1.05rem;">Full report</h1>
             </div>
-            <a href="{{ \Filament\Facades\Filament::getUrl() }}" wire:navigate class="rt-iconbtn" title="Exit to dashboard" aria-label="Exit">
-                <svg viewBox="0 0 24 24"><path d="M14 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
-            </a>
         </div>
 
         {{-- this month at a glance --}}

@@ -2,12 +2,11 @@
 
 namespace App\Filament\Pages;
 
-use App\Models\AssessmentScore;
 use App\Support\Reporting\AttendanceSummary;
+use App\Support\Reporting\CoachMetrics;
 use App\Support\Reporting\ProgressSummary;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use UnitEnum;
@@ -75,21 +74,7 @@ class CoachReports extends Page
     #[Computed]
     public function trend(): array
     {
-        $coachId = Auth::id();
-        $out = [];
-
-        for ($i = 5; $i >= 0; $i--) {
-            $month = now()->startOfMonth()->subMonths($i);
-
-            $avg = AssessmentScore::whereHas('attendance', fn (Builder $query) => $query
-                ->where('coach_id', $coachId)
-                ->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()]))
-                ->avg('score');
-
-            $out[] = ['label' => $month->format('M'), 'avg' => $avg ? round((float) $avg, 1) : 0.0];
-        }
-
-        return $out;
+        return CoachMetrics::trend((int) Auth::id());
     }
 
     /**
@@ -98,8 +83,6 @@ class CoachReports extends Page
     #[Computed]
     public function overallAverage(): ?float
     {
-        $avg = AssessmentScore::whereHas('attendance', fn (Builder $query) => $query->where('coach_id', Auth::id()))->avg('score');
-
-        return $avg ? round((float) $avg, 1) : null;
+        return CoachMetrics::overallAverage((int) Auth::id());
     }
 }

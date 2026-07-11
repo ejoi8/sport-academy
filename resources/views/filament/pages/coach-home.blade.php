@@ -1,6 +1,7 @@
 <x-filament::page>
     @php($stats = $this->stats)
     @php($timeslots = $this->timeslots)
+    @php($trend = $this->trend)
 
     <x-coach-shell active="home" :tabs="true">
         <div class="rt-bar">
@@ -41,5 +42,32 @@
                 @endforelse
             </div>
         </div>
+
+        {{-- compact reporting summary — the score trend, with the full breakdown one tap away --}}
+        <div class="rt-section">
+            <div class="rt-rosterhead"><span class="t">Average score · last 6 months</span></div>
+            <div class="rt-card pad">
+                <div class="rt-trend">
+                    @foreach($trend as $t)
+                        <div class="bar">
+                            <span class="val">{{ $t['avg'] > 0 ? number_format($t['avg'], 1) : '·' }}</span>
+                            <div class="col"><div class="fill" style="height:{{ $t['avg'] > 0 ? round($t['avg'] / 5 * 100) : 2 }}%"></div></div>
+                            <span class="lbl">{{ $t['label'] }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
+        <a href="{{ \App\Filament\Pages\CoachReports::getUrl() }}" wire:navigate class="rt-scard">
+            <span class="rt-pav" aria-hidden="true">
+                <svg viewBox="0 0 24 24" style="width:1.15rem;height:1.15rem;stroke:currentColor;fill:none;stroke-width:2.2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
+            </span>
+            <span class="rt-scard-body">
+                <span class="rt-scard-title" style="display:block;">See full report</span>
+                <span class="rt-scard-meta">Attendance, programmes &amp; skill progress</span>
+            </span>
+            <span aria-hidden="true" style="color:var(--mut); font-size:1.1rem; flex:none;">›</span>
+        </a>
     </x-coach-shell>
 </x-filament::page>

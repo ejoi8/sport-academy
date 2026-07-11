@@ -16,18 +16,22 @@ beforeEach(function () {
     $this->actingAs($this->coach);
 });
 
-it('renders the coach home for an authenticated coach', function () {
+it('renders the coach home with the reporting summary and full-report link', function () {
     $this->get(CoachHome::getUrl())
         ->assertOk()
         ->assertSee('Hi,')
-        ->assertSee('My classes');
+        ->assertSee('My classes')
+        ->assertSee('Average score')          // the compact trend summary
+        ->assertSee('See full report')        // drill-down into the full report
+        ->assertSee(\App\Filament\Pages\CoachReports::getUrl());
 });
 
-it('computes stats and timeslots without error', function () {
+it('computes stats, timeslots and the score trend without error', function () {
     $component = Livewire::test(CoachHome::class)->assertOk();
 
     expect($component->instance()->stats())->toHaveKeys(['sessions_week', 'to_assess', 'attendance'])
-        ->and($component->instance()->timeslots())->toBeArray();
+        ->and($component->instance()->timeslots())->toBeArray()
+        ->and($component->instance()->trend())->toHaveCount(6);
 });
 
 it('sends a coach to the console home as the panel home', function () {

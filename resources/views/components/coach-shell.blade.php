@@ -240,10 +240,6 @@
                 <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0111 0M16 5.5a3 3 0 010 5.6M18 20a5.5 5.5 0 00-3-4.9"/></svg>
                 Students
             </a>
-            <a href="{{ \App\Filament\Pages\CoachReports::getUrl() }}" wire:navigate class="rt-tab {{ $active === 'reports' ? 'on' : '' }}" @if($active === 'reports') aria-current="page" @endif>
-                <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
-                Reports
-            </a>
         </nav>
     @endif
 </div>

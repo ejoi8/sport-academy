@@ -64,11 +64,12 @@ function scoredSession(User $coach, ?Offering $offering = null): Skill
     return $skill;
 }
 
-it('renders the reports tab for a coach', function () {
+it('renders the full report drill-down for a coach', function () {
     $this->get(CoachReports::getUrl())
         ->assertOk()
-        ->assertSee('Reports')
-        ->assertSee('Average score');
+        ->assertSee('Full report')
+        ->assertSee('Average score')
+        ->assertSee('Skill progress');
 });
 
 it('summarises the coach delivery, attendance and progress', function () {

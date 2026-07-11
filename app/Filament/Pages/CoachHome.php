@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\Offering;
 use App\Models\Student;
 use App\Models\TrainingSession;
+use App\Support\Reporting\CoachMetrics;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
@@ -88,6 +89,17 @@ class CoachHome extends Page
             'to_assess' => $toAssess,
             'attendance' => $total > 0 ? round($present / $total * 100).'%' : '—',
         ];
+    }
+
+    /**
+     * A compact 6-month score trend for the Home summary (the full breakdown lives in CoachReports).
+     *
+     * @return array<int, array{label:string, avg:float}>
+     */
+    #[Computed]
+    public function trend(): array
+    {
+        return CoachMetrics::trend((int) Auth::id());
     }
 
     /**
