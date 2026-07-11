@@ -91,17 +91,7 @@
         <div class="rt-rosterhead"><span class="t">Recent sessions</span></div>
         <div class="rt-players">
             @forelse($profile['history']->take(8) as $h)
-                <div class="rt-histrow">
-                    <div class="top">
-                        <span class="dt">{{ $h['date']?->format('j M Y') ?? '—' }}</span>
-                        <span class="rt-badge {{ $statusBadge[$h['status']] ?? 'off' }}">{{ ucfirst($h['status']) }}</span>
-                    </div>
-                    <span class="sl">{{ $h['timeslot'] }}@if($h['coach']) · {{ $h['coach'] }}@endif</span>
-                    @if(! empty($h['scores']))
-                        <span class="sl">{{ collect($h['scores'])->map(fn ($s) => $s['skill'].' '.$s['score'])->implode(' · ') }}</span>
-                    @endif
-                    @if($h['note'])<span class="sl" style="color:var(--sub)">“{{ $h['note'] }}”</span>@endif
-                </div>
+                @include('filament.pages.partials.students-session-row', ['s' => $h])
             @empty
                 <div class="rt-callout" style="padding:1.1rem 1rem">No sessions recorded yet.</div>
             @endforelse

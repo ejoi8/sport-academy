@@ -151,6 +151,16 @@
     .rt-histrow .top{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
     .rt-histrow .dt{ font-weight:800; font-size:.84rem; }
     .rt-histrow .sl{ font-size:.72rem; color:var(--mut); }
+    /* expandable session row: a session-average mini bar + a chevron that reveals per-skill bars */
+    .rt-histrow .hh-right{ display:flex; align-items:center; gap:.5rem; }
+    .rt-avg{ display:inline-flex; align-items:center; gap:.35rem; font-size:.72rem; font-weight:800; color:var(--sub); font-variant-numeric:tabular-nums; }
+    .rt-avg .bar{ width:2.6rem; height:.4rem; background:var(--soft); border:1px solid var(--b); border-radius:999px; overflow:hidden; }
+    .rt-avg .fill{ height:100%; border-radius:999px; }
+    .rt-avg .fill.hi{ background:var(--ok); } .rt-avg .fill.mid{ background-image:linear-gradient(90deg,var(--ac),var(--ac2)); } .rt-avg .fill.lo{ background:var(--wa); }
+    .rt-chev{ border:0; background:transparent; color:var(--mut); cursor:pointer; padding:.1rem; display:grid; place-items:center; flex:none; }
+    .rt-chev svg{ width:1rem; height:1rem; stroke:currentColor; fill:none; stroke-width:2.4; transition:transform .18s ease; }
+    .rt-chev.on svg{ transform:rotate(180deg); }
+    .rt-hist-det{ margin-top:.5rem; }
 
     /* skill level meters — a labelled 0–5 bar per skill, coloured by level */
     .rt-meter{ display:flex; flex-direction:column; gap:.6rem; }

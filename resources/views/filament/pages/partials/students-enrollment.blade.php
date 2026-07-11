@@ -47,17 +47,7 @@
         <div class="rt-rosterhead"><span class="t">Sessions · {{ $report['total_sessions'] }}</span></div>
         <div class="rt-players">
             @forelse($report['sessions'] as $s)
-                <div class="rt-histrow">
-                    <div class="top">
-                        <span class="dt">{{ $s['date']?->format('j M Y') ?? '—' }}</span>
-                        <span class="rt-badge {{ $statusBadge[$s['status']] ?? 'off' }}">{{ ucfirst($s['status']) }}</span>
-                    </div>
-                    @if($s['coach'])<span class="sl">Coach {{ $s['coach'] }}</span>@endif
-                    @if(! empty($s['scores']))
-                        <span class="sl">{{ collect($s['scores'])->map(fn ($x) => $x['skill'].' '.$x['score'])->implode(' · ') }}</span>
-                    @endif
-                    @if($s['note'])<span class="sl" style="color:var(--sub)">“{{ $s['note'] }}”</span>@endif
-                </div>
+                @include('filament.pages.partials.students-session-row', ['s' => $s])
             @empty
                 <div class="rt-callout" style="padding:1.1rem 1rem">No sessions recorded under this enrolment yet.</div>
             @endforelse

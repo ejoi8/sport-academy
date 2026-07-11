@@ -24,7 +24,7 @@
     <style>
         :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --accent:#16a34a; --soft:#f0fdf4; }
         * { box-sizing:border-box; }
-        body { font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); margin:0; background:#f3f4f6; }
+        body { font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); margin:0; background:#f3f4f6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .sheet { max-width:800px; margin:1.5rem auto; background:#fff; padding:2.25rem; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
         .topbar { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid var(--accent); padding-bottom:1rem; margin-bottom:1.5rem; }
         .topbar h1 { font-size:1.35rem; margin:0; }
@@ -49,6 +49,10 @@
         .toolbar { max-width:800px; margin:1.5rem auto -0.5rem; text-align:right; }
         .btn { background:var(--accent); color:#fff; border:0; padding:.5rem 1rem; border-radius:6px; font-weight:600; cursor:pointer; }
         .empty { color:var(--muted); font-style:italic; padding:.5rem 0; }
+        .pipskill { display:inline-flex; align-items:center; gap:5px; margin:0 12px 4px 0; font-size:.8rem; white-space:nowrap; }
+        .pips { display:inline-flex; gap:2px; }
+        .pip { width:9px; height:9px; border-radius:50%; border:1px solid #94a3b8; background:#fff; }
+        .pip.on { background:var(--accent); border-color:var(--accent); }
         @media print {
             body { background:#fff; }
             .sheet { box-shadow:none; margin:0; max-width:none; border-radius:0; padding:0; }
@@ -148,7 +152,10 @@
                             <td>{{ $session['coach'] ?? '—' }}</td>
                             <td>
                                 @forelse($session['scores'] as $score)
-                                    {{ $score['skill'] }} <strong>{{ $score['score'] }}</strong>@if(! $loop->last) · @endif
+                                    <span class="pipskill">
+                                        <span>{{ $score['skill'] }}</span>
+                                        <span class="pips" title="{{ $score['score'] }}/5">@for($p = 1; $p <= 5; $p++)<span class="pip{{ $p <= $score['score'] ? ' on' : '' }}"></span>@endfor</span>
+                                    </span>
                                 @empty
                                     <span class="muted">—</span>
                                 @endforelse
