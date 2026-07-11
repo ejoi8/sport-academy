@@ -184,8 +184,8 @@ class DemoSeeder extends Seeder
     private function createPrograms(Sport $sport): array
     {
         return [
-            'group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group', 'base_price_sen' => 12000, 'walk_in_fee_sen' => 3750, 'default_sessions' => 4]),
-            'one2one' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 30000, 'walk_in_fee_sen' => 9375, 'default_sessions' => 4]),
+            'group' => Program::create(['sport_id' => $sport->id, 'name' => 'Group', 'base_price_sen' => 16000, 'walk_in_fee_sen' => 5000, 'default_sessions' => 4]),
+            'one2one' => Program::create(['sport_id' => $sport->id, 'name' => '1-on-1', 'base_price_sen' => 24000, 'walk_in_fee_sen' => 7500, 'default_sessions' => 4]),
             'Football Clinic' => Program::create(['sport_id' => $sport->id, 'name' => 'Football Clinic', 'base_price_sen' => 9000, 'walk_in_fee_sen' => 3000, 'default_sessions' => 1]),
         ];
     }
