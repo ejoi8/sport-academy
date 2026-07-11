@@ -99,6 +99,35 @@ it('drops a stale student id back to the list', function () {
         ->assertSet('studentId', null);
 });
 
+it('pages the roster with load more', function () {
+    foreach (range(1, 45) as $i) {
+        Student::create(['name' => sprintf('Kid %02d', $i), 'is_active' => true]);
+    }
+
+    $component = Livewire::test(Students::class);
+
+    expect($component->instance()->matchingCount())->toBe(45)
+        ->and($component->instance()->results())->toHaveCount(40); // first page
+
+    $component->call('loadMore');
+
+    expect($component->instance()->results())->toHaveCount(45); // rest revealed
+});
+
+it('resets paging when the search changes', function () {
+    foreach (range(1, 50) as $i) {
+        Student::create(['name' => 'Alpha '.$i, 'is_active' => true]);
+    }
+    Student::create(['name' => 'Zenith Unique', 'is_active' => true]);
+
+    $component = Livewire::test(Students::class)->call('loadMore'); // perPage now 80
+
+    $component->set('search', 'Zenith');
+
+    expect($component->instance()->results())->toHaveCount(1)
+        ->and($component->get('perPage'))->toBe(40); // paging reset for the new search
+});
+
 /** Build a student enrolled in a baseline offering, with one recorded, scored session under it. */
 function enrolmentWithSession(User $coach): array
 {

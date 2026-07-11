@@ -9,6 +9,7 @@ use App\Models\Student;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -59,6 +60,9 @@ class Students extends Page
 
     public string $search = '';
 
+    // How many roster rows to show; grows via "Load more" and resets when the search changes.
+    public int $perPage = 40;
+
     // Add/edit sheet. `editingId === null` means we're creating a new student.
     public bool $editing = false;
 
@@ -107,19 +111,25 @@ class Students extends Page
      *
      * @return array<int, array{id:int, name:string, age:?int, ic:?string, active:bool}>
      */
-    #[Computed]
-    public function results(): array
+    /** The search-filtered roster query (active first), shared by the list and its count. */
+    protected function studentQuery(): Builder
     {
         $term = str_replace(['\\', '%', '_'], '', trim($this->search));
 
         return Student::query()
-            ->when($term !== '', fn ($query) => $query->where(fn ($where) => $where
+            ->when($term !== '', fn (Builder $query) => $query->where(fn (Builder $where) => $where
                 ->where('name', 'like', "%{$term}%")
                 ->orWhere('ic_number', 'like', "%{$term}%")
                 ->orWhere('guardian_name', 'like', "%{$term}%")))
             ->orderByDesc('is_active')
-            ->orderBy('name')
-            ->limit(50)
+            ->orderBy('name');
+    }
+
+    #[Computed]
+    public function results(): array
+    {
+        return $this->studentQuery()
+            ->limit($this->perPage)
             ->get()
             ->map(fn (Student $student): array => [
                 'id' => $student->id,
@@ -131,10 +141,21 @@ class Students extends Page
             ->all();
     }
 
+    /** Total students matching the current search (ignores the page size). */
     #[Computed]
-    public function totalStudents(): int
+    public function matchingCount(): int
     {
-        return Student::count();
+        return $this->studentQuery()->count();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->perPage = 40; // start each new search from the top
+    }
+
+    public function loadMore(): void
+    {
+        $this->perPage += 40;
     }
 
     #[Computed]
@@ -408,6 +429,6 @@ class Students extends Page
      */
     protected function flushCaches(): void
     {
-        unset($this->results, $this->totalStudents, $this->student, $this->profile, $this->enrollment, $this->enrollmentReport);
+        unset($this->results, $this->matchingCount, $this->student, $this->profile, $this->enrollment, $this->enrollmentReport);
     }
 }

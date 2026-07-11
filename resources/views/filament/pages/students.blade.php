@@ -56,8 +56,9 @@
 
             <input type="search" wire:model.live.debounce.300ms="search" placeholder="Search name, IC or guardian…">
 
+            @php($matching = $this->matchingCount)
             <div class="rt-list">
-                <div class="rt-listlabel">{{ trim($search) !== '' ? count($students).' of '.$this->totalStudents : $this->totalStudents.' students' }}</div>
+                <div class="rt-listlabel">{{ count($students) < $matching ? 'Showing '.count($students).' of '.$matching : $matching.' student'.($matching === 1 ? '' : 's') }}</div>
 
                 @forelse($students as $s)
                     <button type="button" class="rt-scard" wire:click="openStudent({{ $s['id'] }})">
@@ -76,6 +77,13 @@
                         {{ trim($search) !== '' ? 'No students match "'.trim($search).'".' : 'No students yet — add the first below.' }}
                     </div>
                 @endforelse
+
+                @if(count($students) < $matching)
+                    <button type="button" class="rt-addbtn" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore">
+                        <span wire:loading.remove wire:target="loadMore">Load more · {{ $matching - count($students) }} more</span>
+                        <span wire:loading wire:target="loadMore">Loading…</span>
+                    </button>
+                @endif
 
                 <button type="button" class="rt-scard new" wire:click="startCreate">
                     <span class="rt-plus" aria-hidden="true">＋</span>
