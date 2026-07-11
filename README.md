@@ -1,11 +1,74 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Football Academy
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Management app for a football training academy — a **Filament staff panel** (admin + coaches) plus a
+**public booking site**. Coaches run training and assess players; parents register their children and
+follow their progress.
+
+- **Stack:** Laravel 13 · Filament v5 · Livewire · Tailwind (Vite) · Spatie Permission (Shield) · Pest.
+- **Staff panel:** `/app` (admin & coaches only — parents live on the public site).
+
+## Getting started
+
+**Prerequisites:** PHP 8.3+, Composer, Node 18+ & npm, and a database. SQLite works out of the box;
+MySQL/MariaDB (e.g. via Laragon) is fine too.
+
+```bash
+# 1. Dependencies
+composer install
+npm install
+
+# 2. Environment
+cp .env.example .env
+php artisan key:generate
+
+# 3. Database
+#    SQLite (default): the file is created automatically on first migrate.
+#    MySQL: set DB_CONNECTION=mysql and the DB_* values in .env instead.
+
+# 4. Migrate + seed  (see "Seeding" for what each option gives you)
+php artisan migrate:fresh --seed
+
+# 5. Build the Filament theme + front-end assets
+npm run build          # or `npm run dev` for watch mode during development
+
+# 6. Serve
+php artisan serve      # http://localhost:8000  (or use your Laragon vhost)
+```
+
+Then open the staff panel at **`/app`** and sign in (see [Logins](#logins)).
+
+## Seeding
+
+Three seeders — pick the one that fits what you're doing:
+
+| Seeder | Command | What you get | Students |
+| --- | --- | --- | --- |
+| **Baseline** _(default)_ | `php artisan migrate:fresh --seed` | Roles, rubric, the 3 programmes, **this month's** open slots, one super-admin/coach login | none |
+| **Launch** | `php artisan migrate:fresh` then<br>`php artisan db:seed --class="Database\Seeders\LaunchSeeder"` | Launch-ready: the 3 programmes, open slots for **this + next month**, an admin + the 4-coach team | none |
+| **Demo** | `php artisan migrate:fresh` then<br>`php artisan db:seed --class="Database\Seeders\DemoSeeder"` | A living **~5-year** dataset: hundreds of students, enrolments, recorded sessions + rubric scores, anchored to today | ~380 |
+
+- **Launch** is the real "open for registration, no students yet" starting point for a new academy.
+- **Baseline** and **Launch** are **idempotent** (safe to re-run). **Demo** is **not** — always
+  `migrate:fresh` before re-seeding it. Demo is heavier (~90k score rows) but seeds in a few seconds.
+
+## Logins
+
+Every seeded account uses the password **`password`**.
+
+| Role | Email | Seeded by |
+| --- | --- | --- |
+| Admin (super-admin) | `admin@admin.com` | Launch, Demo |
+| Coach | `coach@academy.test` · `amir@` · `lena@` · `hafiz@academy.test` | all |
+| Parent | `parent1@demo.test`, `parent2@…`, … | Demo only |
+
+> In **Baseline**, the single login `coach@academy.test` is both super-admin **and** coach. In
+> **Launch**, coaches hold the plain `coach` role (the coach console, not the admin resources).
+
+## Testing
+
+```bash
+php artisan test
+```
 
 ## Project docs
 
@@ -24,53 +87,3 @@
   the decisions taken (all patched).
 - [Execution plan — Quick Record](docs/plan-quick-record.md) — student-first recording menu
   (side-by-side comparison with Run Training) + coach-facing Student 360 page. **Not yet built.**
-
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
-```
-
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
