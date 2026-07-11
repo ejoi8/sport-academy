@@ -28,6 +28,11 @@ class AppPanelProvider extends PanelProvider
             ->viteTheme('resources/css/filament/app/theme.css')
             ->login()
             ->emailVerification()
+            // Coaches land in their console home after login; everyone else keeps the dashboard.
+            // Evaluated per request, so auth is resolved; null-safe falls back to the dashboard.
+            ->homeUrl(fn (): string => \Illuminate\Support\Facades\Auth::user()?->hasRole('coach')
+                ? \App\Filament\Pages\CoachHome::getUrl()
+                : \Filament\Pages\Dashboard::getUrl())
             ->colors([
                 'primary' => Color::Green,
             ])
