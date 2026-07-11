@@ -28,6 +28,8 @@ class AppPanelProvider extends PanelProvider
             ->viteTheme('resources/css/filament/app/theme.css')
             ->login()
             ->emailVerification()
+            // Self-service profile (user menu → Profile): edit own name/email/phone/password.
+            ->profile(\App\Filament\Pages\Auth\EditProfile::class, isSimple: false)
             // Coaches land in their console home after login; everyone else keeps the dashboard.
             // Evaluated per request, so auth is resolved; null-safe falls back to the dashboard.
             ->homeUrl(fn (): string => \Illuminate\Support\Facades\Auth::user()?->hasRole('coach')
