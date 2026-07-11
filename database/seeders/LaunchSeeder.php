@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Hash;
  * Idempotent (firstOrCreate throughout), so it's safe to run on a fresh or partially-set-up DB:
  *   php artisan db:seed --class="Database\Seeders\LaunchSeeder"
  *
- * Logins, all "password": admin@admin.com (super-admin — full panel) and coach@academy.test /
+ * Logins, all "password": admin@admin.com (super-admin — full panel) and coach@coach.com /
  * amir@ / lena@ / hafiz@academy.test (the `coach` role — the coach console, not the admin resources).
  */
 class LaunchSeeder extends Seeder
@@ -36,7 +36,7 @@ class LaunchSeeder extends Seeder
         $sequence = 1;
         $coaches = [];
 
-        foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
+        foreach (['Farid' => 'coach@coach.com', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
             $coach = $this->staff('Coach '.$name, $email, '012-000 100'.$sequence++, $password);
             $coach->syncRoles(['coach']);
             $coaches[$name] = $coach;

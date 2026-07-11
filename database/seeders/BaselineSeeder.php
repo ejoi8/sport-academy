@@ -10,10 +10,10 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * A lean, deterministic baseline: roles, the Football rubric, a coach login
- * (coach@academy.test / password), and the real weekend catalog for the academy's three programs —
- * Group, 1-on-1 and Goalkeeper — on their weekend slots (Sabtu petang / Ahad pagi). No students or
- * enrollments are seeded.
+ * A lean, deterministic baseline: roles, the Football rubric, an admin + a coach login
+ * (admin@admin.com super-admin, coach@coach.com coach — both "password"), and the real weekend
+ * catalog for the academy's three programs — Group, 1-on-1 and Goalkeeper — on their weekend slots
+ * (Sabtu petang / Ahad pagi). No students or enrollments are seeded.
  *
  * Monthly fees + capacities mirror the published package table: Group RM160 / 40 slots (Sat only),
  * 1-on-1 RM240 / 12 per slot (Sat + Sun), Goalkeeper RM120 / 12 per slot (Sat + Sun); all 4
@@ -30,18 +30,29 @@ class BaselineSeeder extends Seeder
 
         $sport = Sport::where('name', 'Football')->firstOrFail();
 
-        $coach = User::firstOrCreate(
-            ['email' => 'coach@academy.test'],
+        // The super-admin — full panel access (Gate::before grants every gate).
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@admin.com'],
             [
-                'name' => 'Coach Farid',
-                'phone' => '012-000 1001', // gateways refuse a checkout without a customer phone
+                'name' => 'Admin',
+                'phone' => '012-000 0001', // gateways refuse a checkout without a customer phone
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
             ],
         );
-        // super_admin: Gate::before grants the panel on every request.
-        // coach: so the user appears in the Run Training coach dropdown (which filters to coaches).
-        $coach->assignRole('super_admin');
+        $admin->assignRole('super_admin');
+
+        // The main coach — the `coach` role so they appear in the Run Training coach dropdown
+        // (which filters to coaches) and get the coach console, not the admin resources.
+        $coach = User::firstOrCreate(
+            ['email' => 'coach@coach.com'],
+            [
+                'name' => 'Coach Farid',
+                'phone' => '012-000 1001',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+            ],
+        );
         $coach->assignRole('coach');
 
         $group = Program::firstOrCreate([

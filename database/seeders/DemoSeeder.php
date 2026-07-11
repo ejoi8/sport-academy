@@ -29,7 +29,8 @@ use Spatie\Permission\Models\Role;
  *  - NEXT month: near-capacity renewals (Active), no sessions.
  *
  * Every student is linked to a parent account (siblings cluster into families); guardian name/phone
- * mirror the parent. Logins: admin@admin.com, coach@academy.test (+ amir/lena/hafiz), all "password".
+ * mirror the parent. Logins: admin@admin.com (super-admin) + coach@coach.com / amir@ / lena@ /
+ * hafiz@academy.test (coach), all "password".
  *
  * Volume at the default 60-month history is large (~90k scores) but seeds via batched inserts; the
  * seeder tests lower {@see static::$historyMonths} to stay fast.
@@ -97,12 +98,11 @@ class DemoSeeder extends Seeder
     {
         $sequence = 1;
 
-        foreach (['Farid' => 'coach@academy.test', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
+        foreach (['Farid' => 'coach@coach.com', 'Amir' => 'amir@academy.test', 'Lena' => 'lena@academy.test', 'Hafiz' => 'hafiz@academy.test'] as $name => $email) {
             $coach = User::firstOrCreate(
                 ['email' => $email],
                 ['name' => 'Coach '.$name, 'phone' => '012-000 100'.$sequence++, 'password' => $this->password, 'email_verified_at' => now()],
             );
-            $coach->assignRole('super_admin');
             $coach->assignRole('coach');
             $this->coaches[$name] = $coach;
         }

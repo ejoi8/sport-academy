@@ -13,7 +13,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     Filament::setCurrentPanel(Filament::getPanel('app'));
     $this->seed(BaselineSeeder::class);
-    $this->coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    $this->coach = User::where('email', 'coach@coach.com')->firstOrFail();
     $this->actingAs($this->coach);
 });
 

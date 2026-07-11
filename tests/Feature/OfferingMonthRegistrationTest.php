@@ -15,7 +15,7 @@ beforeEach(function () {
     Filament::setCurrentPanel(Filament::getPanel('app'));
     $this->seed(BaselineSeeder::class); // this month's offerings, all open
     $this->period = now()->format('Y-m');
-    $this->actingAs(User::where('email', 'coach@academy.test')->firstOrFail()); // super_admin
+    $this->actingAs(User::where('email', 'admin@admin.com')->firstOrFail()); // super-admin, manages offerings
 });
 
 it('closes every offering in a month in one action', function () {

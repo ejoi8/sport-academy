@@ -35,9 +35,12 @@ it('seeds a usable baseline: rubric, catalog, and a coach login', function () {
         ->and(Offering::where('program_id', $oneToOne->id)->value('capacity'))->toBe(12)
         ->and(Offering::where('program_id', $goalkeeper->id)->value('capacity'))->toBe(12);
 
-    $coach = User::where('email', 'coach@academy.test')->firstOrFail();
-    expect($coach->hasRole('super_admin'))->toBeTrue()
-        ->and($coach->hasRole('coach'))->toBeTrue();
+    // Two logins: the super-admin and the main coach (a plain coach — not a super-admin).
+    $admin = User::where('email', 'admin@admin.com')->firstOrFail();
+    $coach = User::where('email', 'coach@coach.com')->firstOrFail();
+    expect($admin->hasRole('super_admin'))->toBeTrue()
+        ->and($coach->hasRole('coach'))->toBeTrue()
+        ->and($coach->hasRole('super_admin'))->toBeFalse();
 });
 
 it('seeds demo data sharing the same rubric, with history and scores', function () {

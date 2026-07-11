@@ -7,7 +7,7 @@ use Illuminate\Database\Seeder;
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Seed a usable baseline: roles, a coach login (coach@academy.test / password),
+     * Seed a usable baseline: roles, admin@admin.com + coach@coach.com logins (password "password"),
      * the Football rubric, and a small weekend catalog without students or enrollments.
      *
      * For richer, scenario-tagged data (multiple coaches, months of history and

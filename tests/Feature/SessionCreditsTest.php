@@ -148,7 +148,7 @@ it('creditSummary sums owed and over per enrolment without netting', function ()
 it('consumes a credit and links the attendance to the enrolment when a session is saved', function () {
     Filament::setCurrentPanel(Filament::getPanel('app'));
     $this->seed(BaselineSeeder::class);
-    $coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    $coach = User::where('email', 'coach@coach.com')->firstOrFail();
     $this->actingAs($coach);
 
     // The baseline seeds a catalog without people — enrol one student ourselves.

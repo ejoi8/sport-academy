@@ -24,8 +24,10 @@ beforeEach(function () {
     Filament::setCurrentPanel(Filament::getPanel('app'));
     DemoSeeder::$historyMonths = 4; // keep the demo seed small + fast for tests
     $this->seed(DemoSeeder::class);
-    // coach@academy.test is super_admin + coach, so it can view every widget.
-    $this->coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    // The demo coach carries real coaching data; grant super_admin here so this one account can
+    // view every widget (admin + coach) in a single pass.
+    $this->coach = User::where('email', 'coach@coach.com')->firstOrFail();
+    $this->coach->assignRole('super_admin');
     $this->actingAs($this->coach);
 });
 

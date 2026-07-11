@@ -30,7 +30,7 @@ function runTrainingContext(): array
 {
     test()->seed(BaselineSeeder::class);
 
-    $coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    $coach = User::where('email', 'coach@coach.com')->firstOrFail();
     $skill = Skill::query()->orderBy('sort_order')->firstOrFail();
 
     // The baseline seeds a weekend catalog WITHOUT people — pick the Saturday Group slot

@@ -44,7 +44,7 @@ Three seeders — pick the one that fits what you're doing:
 
 | Seeder | Command | What you get | Students |
 | --- | --- | --- | --- |
-| **Baseline** _(default)_ | `php artisan migrate:fresh --seed` | Roles, rubric, the 3 programmes, **this month's** open slots, one super-admin/coach login | none |
+| **Baseline** _(default)_ | `php artisan migrate:fresh --seed` | Roles, rubric, the 3 programmes, **this month's** open slots, an admin + a coach login | none |
 | **Launch** | `php artisan migrate:fresh` then<br>`php artisan db:seed --class="Database\Seeders\LaunchSeeder"` | Launch-ready: the 3 programmes, open slots for **this + next month**, an admin + the 4-coach team | none |
 | **Demo** | `php artisan migrate:fresh` then<br>`php artisan db:seed --class="Database\Seeders\DemoSeeder"` | A living **~5-year** dataset: hundreds of students, enrolments, recorded sessions + rubric scores, anchored to today | ~380 |
 
@@ -58,12 +58,13 @@ Every seeded account uses the password **`password`**.
 
 | Role | Email | Seeded by |
 | --- | --- | --- |
-| Admin (super-admin) | `admin@admin.com` | Launch, Demo |
-| Coach | `coach@academy.test` · `amir@` · `lena@` · `hafiz@academy.test` | all |
+| Admin (super-admin) | `admin@admin.com` | all |
+| Main coach | `coach@coach.com` | all |
+| More coaches | `amir@` · `lena@` · `hafiz@academy.test` | Launch, Demo |
 | Parent | `parent1@demo.test`, `parent2@…`, … | Demo only |
 
-> In **Baseline**, the single login `coach@academy.test` is both super-admin **and** coach. In
-> **Launch**, coaches hold the plain `coach` role (the coach console, not the admin resources).
+> `admin@admin.com` is the **super-admin** (full panel); `coach@coach.com` is a **coach** (the coach
+> console, not the admin resources). Manage offerings, users, etc. as the admin.
 
 ## Testing
 

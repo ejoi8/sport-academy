@@ -31,7 +31,7 @@ it('sets up an admin and a coaching team with the right roles', function () {
     $admin = User::where('email', 'admin@admin.com')->firstOrFail();
     expect($admin->hasRole('super_admin'))->toBeTrue();
 
-    foreach (['coach@academy.test', 'amir@academy.test', 'lena@academy.test', 'hafiz@academy.test'] as $email) {
+    foreach (['coach@coach.com', 'amir@academy.test', 'lena@academy.test', 'hafiz@academy.test'] as $email) {
         $coach = User::where('email', $email)->firstOrFail();
         expect($coach->hasRole('coach'))->toBeTrue()
             ->and($coach->hasRole('super_admin'))->toBeFalse(); // real coach, not a super-admin
@@ -39,7 +39,7 @@ it('sets up an admin and a coaching team with the right roles', function () {
 });
 
 it('lets a plain coach reach the coach console', function () {
-    $coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    $coach = User::where('email', 'coach@coach.com')->firstOrFail();
 
     $this->actingAs($coach)->get(RunTraining::getUrl())->assertOk();
     $this->actingAs($coach)->get(CoachHome::getUrl())->assertOk();
@@ -50,5 +50,5 @@ it('is safe to run twice (idempotent)', function () {
 
     expect(Program::count())->toBe(3)
         ->and(Offering::count())->toBe(10)
-        ->and(User::where('email', 'coach@academy.test')->count())->toBe(1);
+        ->and(User::where('email', 'coach@coach.com')->count())->toBe(1);
 });

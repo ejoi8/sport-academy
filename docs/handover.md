@@ -38,8 +38,8 @@ php artisan db:seed --class="Database\Seeders\DemoSeeder" --force
 
 | Email | Role |
 |---|---|
-| `admin@admin.com` | super_admin |
-| `coach@academy.test` (Farid), `amir@…`, `lena@…`, `hafiz@…` | coach + super_admin |
+| `admin@admin.com` | super_admin (the admin) |
+| `coach@coach.com` (Farid, the main coach), `amir@…`, `lena@…`, `hafiz@academy.test` | coach |
 | `parent1@demo.test`, `parent2@demo.test`, … | parent (no panel access) |
 
 Demo data: the academy's real weekend timetable — **Group** (Sabtu petang, Sat 16:00–18:00) and

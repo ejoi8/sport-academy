@@ -20,7 +20,7 @@ beforeEach(function () {
 it('counts only present and late players as attended on the session card', function () {
     $this->seed(BaselineSeeder::class);
 
-    $coach = User::where('email', 'coach@academy.test')->firstOrFail();
+    $coach = User::where('email', 'coach@coach.com')->firstOrFail();
     $offering = Offering::query()
         ->where('is_open', true)
         ->whereHas('program', fn ($query) => $query->where('name', 'Group'))
