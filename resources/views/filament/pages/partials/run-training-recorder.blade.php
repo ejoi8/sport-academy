@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    <div class="rt-coachstrip">
+    <div class="rt-coachstrip" data-tour="coach">
         <span class="lbl">Coach for all</span>
         <select wire:model="bulkCoachId">
             <option value="">— unassigned —</option>
@@ -41,6 +41,12 @@
         </select>
         <button type="button" class="rt-textbtn" wire:click="assignAll" @disabled(empty($coachOptions))>Apply</button>
         <button type="button" class="rt-linkbtn" wire:click="startAddCoach">+ New coach</button>
+    </div>
+
+    {{-- First-use tip; dismissible, remembered per device. --}}
+    <div x-data="{ show: ! window.localStorage?.getItem('rt-recorder-hint') }" x-show="show" x-cloak class="rt-hint">
+        <span>💡 Tap a player to score them · tap the status pill to change attendance.</span>
+        <button type="button" @click="show = false; window.localStorage?.setItem('rt-recorder-hint', '1')" aria-label="Dismiss tip">✕</button>
     </div>
 
     <div>
@@ -52,7 +58,7 @@
                 </span>
             @endif
         </div>
-        <div class="rt-players" style="margin-top:.5rem">
+        <div class="rt-players" style="margin-top:.5rem" data-tour="roster">
             @forelse($visibleEnrolled as $key => $row)
                 @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'removable' => false])
             @empty
@@ -70,12 +76,12 @@
             @foreach($extras as $key => $row)
                 @include('filament.pages.partials.run-training-item', ['key' => $key, 'row' => $row, 'removable' => true])
             @endforeach
-            <button type="button" class="rt-addbtn" wire:click="startAdd">＋ Add walk-in or make-up</button>
+            <button type="button" class="rt-addbtn" data-tour="add" wire:click="startAdd">＋ Add walk-in or make-up</button>
         </div>
     </div>
 </div>
 
-<div class="rt-actionbar">
+<div class="rt-actionbar" data-tour="save">
     @if($savedSessionExists)
         <button type="button" class="rt-delete" wire:click="deleteSession" wire:confirm="Delete this saved session and all its attendance + scores? This cannot be undone.">Delete</button>
     @endif

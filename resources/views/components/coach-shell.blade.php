@@ -223,6 +223,26 @@
     .rt-tab svg{ width:1.4rem; height:1.4rem; stroke:currentColor; fill:none; stroke-width:2; }
     .rt-tab.on{ color:var(--ac2); background:var(--acs); }
 
+    /* ---------- guided spotlight tour + inline hint ---------- */
+    /* A dark cut-out overlay: four masks darken everything except the highlighted element's gap
+       (which stays clickable), a ring outlines it, and a popover explains it. No JS library. */
+    .rt-tour{ position:fixed; inset:0; z-index:90; }
+    .rt-tour-mask{ position:fixed; background:rgba(15,23,42,.6); }
+    .dark .rt-tour-mask{ background:rgba(0,0,0,.66); }
+    .rt-tour-ring{ position:fixed; border-radius:.8rem; box-shadow:0 0 0 3px var(--ac),0 0 0 6px color-mix(in srgb,var(--ac) 30%,transparent); pointer-events:none; transition:top .18s ease,left .18s ease,width .18s ease,height .18s ease; }
+    .rt-tour-pop{ position:fixed; left:50%; transform:translateX(-50%); width:calc(100% - 2rem); max-width:30rem; z-index:91; background:var(--bg); border-radius:1.1rem; box-shadow:0 18px 44px -12px rgba(15,23,42,.55); padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.4rem; }
+    .rt-tour-pop .ttl{ font-size:1rem; font-weight:800; letter-spacing:-.01em; }
+    .rt-tour-pop .txt{ font-size:.86rem; color:var(--sub); line-height:1.45; }
+    .rt-tour-foot{ display:flex; align-items:center; gap:.5rem; margin-top:.45rem; }
+    .rt-tour-count{ font-size:.72rem; font-weight:800; color:var(--mut); font-variant-numeric:tabular-nums; }
+    .rt-tour-foot .grow{ flex:1; }
+    .rt-tour-foot .back{ border:1px solid var(--bs); background:var(--bg); color:var(--sub); border-radius:.8rem; padding:.55rem .9rem; font-weight:800; cursor:pointer; font-size:.82rem; }
+    .rt-tour-foot .rt-sheet-done{ padding:.55rem 1.15rem; border-radius:.8rem; font-size:.9rem; }
+    .rt-tour-skip{ border:0; background:transparent; color:var(--mut); font-weight:700; font-size:.8rem; cursor:pointer; }
+
+    .rt-hint{ display:flex; align-items:center; gap:.5rem; font-size:.78rem; color:var(--sub); background:var(--acs); border:1px solid color-mix(in srgb,var(--ac) 22%,transparent); border-radius:.7rem; padding:.5rem .65rem; }
+    .rt-hint button{ margin-left:auto; border:0; background:transparent; color:var(--mut); cursor:pointer; font-size:.9rem; flex:none; padding:0 .2rem; }
+
     /* ---------- help modal ---------- */
     [x-cloak]{ display:none; }
     .rt-help-overlay{ position:fixed; inset:0; background:rgba(15,23,42,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; }

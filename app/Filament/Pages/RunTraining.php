@@ -72,6 +72,9 @@ class RunTraining extends Page
 
     public bool $savedSessionExists = false;
 
+    // The getting-started guide auto-shows once per coach (tracked on the user), re-openable from help.
+    public bool $onboarding = false;
+
     // Add-participant panel state.
     public bool $adding = false;
 
@@ -168,6 +171,29 @@ class RunTraining extends Page
         }
 
         $this->loadRoster();
+
+        // First time on Run Training? Auto-open the getting-started guide.
+        if (Auth::user() && ! Auth::user()->onboarded_run_training_at) {
+            $this->onboarding = true;
+        }
+    }
+
+    /** Re-open the getting-started guide (from the help modal). */
+    public function openOnboarding(): void
+    {
+        $this->onboarding = true;
+    }
+
+    /** Close the guide and remember the coach has seen it (used for both "Start" and "Skip"). */
+    public function completeOnboarding(): void
+    {
+        $user = Auth::user();
+
+        if ($user && ! $user->onboarded_run_training_at) {
+            $user->forceFill(['onboarded_run_training_at' => now()])->save();
+        }
+
+        $this->onboarding = false;
     }
 
     public function updatedDate(): void

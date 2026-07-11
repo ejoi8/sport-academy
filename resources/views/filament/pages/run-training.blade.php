@@ -43,7 +43,7 @@
                     <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
                 </label>
                 <button type="button" class="rt-textbtn" wire:click="goToday">Today</button>
-                <button type="button" class="rt-iconbtn" @click="help = true" aria-label="How credits work"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.2-1.5 2.2M12 17h.01"/></svg></button>
+                <button type="button" class="rt-iconbtn" data-tour="help" @click="help = true" aria-label="How credits work"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.2-1.5 2.2M12 17h.01"/></svg></button>
                 {{-- Focus mode hides the panel nav, so this is the way back out. Points at the panel
                      home (which restores the chrome); swap for a logout route for a kiosk device. --}}
                 <a href="{{ \Filament\Facades\Filament::getUrl() }}" wire:navigate class="rt-iconbtn" title="Exit to dashboard" aria-label="Exit">
@@ -51,7 +51,7 @@
                 </a>
             </div>
 
-            <div class="rt-week">
+            <div class="rt-week" data-tour="date">
                 <button type="button" class="rt-iconbtn" wire:click="$set('date', '{{ $sel->copy()->subDays(7)->toDateString() }}')" aria-label="Previous week"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
                 <div class="rt-days">
                     @for($i = 0; $i < 7; $i++)
@@ -66,7 +66,7 @@
                 <button type="button" class="rt-iconbtn" wire:click="$set('date', '{{ $sel->copy()->addDays(7)->toDateString() }}')" aria-label="Next week"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
             </div>
 
-            <div class="rt-list">
+            <div class="rt-list" data-tour="sessions">
                 <div class="rt-listlabel">{{ $sel->format('l, j F') }}</div>
 
                 @forelse($sessions as $s)
@@ -86,7 +86,7 @@
                     <div class="rt-callout"><span class="ball" aria-hidden="true">⚽</span>No sessions scheduled on this day.</div>
                 @endforelse
 
-                <button type="button" class="rt-scard new @if($dirty) locked @endif" wire:click="toggleNewSession">
+                <button type="button" class="rt-scard new @if($dirty) locked @endif" data-tour="new-session" wire:click="toggleNewSession">
                     <span class="rt-plus" aria-hidden="true">＋</span>
                     <span class="rt-scard-body">
                         <span class="rt-scard-title" style="display:block;">Create new session</span>
@@ -176,11 +176,98 @@
             @include('filament.pages.partials.run-training-coach')
         @endif
 
+        {{-- ============================ ONBOARDING (guided spotlight tour) ============================ --}}
+        {{-- Steps adapt to the screen: the list gets the day/session steps, the recorder gets the
+             mark/score/save steps. Targets are the real elements (data-tour="…"). --}}
+        @php($tourSteps = $onRecorder ? [
+            ['target' => 'coach', 'title' => 'Coach for all', 'text' => 'Pick who’s coaching and Apply it across the roster — or set a coach per player inside their card.'],
+            ['target' => 'roster', 'title' => 'Mark & score', 'text' => 'Tap the status pill to set attendance (Present → Late → Absent → Excused). Tap a player’s row to give skill scores (1–5) and a note.'],
+            ['target' => 'add', 'title' => 'Walk-ins & make-ups', 'text' => 'Add drop-ins and make-ups here — credits, fees and badges are worked out for you.'],
+            ['target' => 'save', 'title' => 'Save the session', 'text' => 'Hit Save when you’re done. Over-limit players are flagged, never blocked — and you can re-open a saved session to edit it.'],
+        ] : [
+            ['target' => 'date', 'title' => 'Pick the day', 'text' => 'Tap a day on the strip, or the calendar to jump to any date. Today is already selected.'],
+            ['target' => 'sessions', 'title' => 'Your sessions', 'text' => 'Every class that day shows here. Tap a card to open its roster — go ahead, tap one and the tour follows you in.'],
+            ['target' => 'new-session', 'title' => 'Off-schedule session', 'text' => 'Running a one-off clinic or an extra class? Create it here.'],
+            ['target' => 'help', 'title' => 'Credits & badges', 'text' => 'Make-ups, walk-ins and the credit badges are all explained behind the ? button.'],
+        ])
+        @if($onboarding)
+            <div class="rt-tour" wire:key="tour-{{ $onRecorder ? 'recorder' : 'list' }}" x-data="rtTour(@js($tourSteps))" x-cloak>
+                <div class="rt-tour-mask" :style="`top:0;left:0;right:0;height:${Math.max(0, rect.top)}px`"></div>
+                <div class="rt-tour-mask" :style="`top:${rect.top + rect.height}px;left:0;right:0;bottom:0`"></div>
+                <div class="rt-tour-mask" :style="`top:${rect.top}px;left:0;width:${Math.max(0, rect.left)}px;height:${rect.height}px`"></div>
+                <div class="rt-tour-mask" :style="`top:${rect.top}px;left:${rect.left + rect.width}px;right:0;height:${rect.height}px`"></div>
+                <div class="rt-tour-ring" x-show="found" :style="`top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`"></div>
+                <div class="rt-tour-pop" :style="popTop !== null ? `top:${popTop}px` : `bottom:${popBottom}px`">
+                    <div class="ttl" x-text="step.title"></div>
+                    <div class="txt" x-text="step.text"></div>
+                    <div class="rt-tour-foot">
+                        <span class="rt-tour-count" x-text="`${i + 1} / ${steps.length}`"></span>
+                        <button type="button" class="rt-tour-skip" @click="finish()">Skip</button>
+                        <span class="grow"></span>
+                        <button type="button" class="back" x-show="i > 0" @click="back()">Back</button>
+                        <button type="button" class="rt-sheet-done" @click="next()" x-text="i < steps.length - 1 ? 'Next' : 'Done'"></button>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('rtTour', (steps) => ({
+                    steps,
+                    i: 0,
+                    found: true,
+                    rect: { top: 0, left: 0, width: 0, height: 0 },
+                    popTop: 0,
+                    popBottom: 0,
+                    _on: null,
+                    init() {
+                        this._on = () => this.position();
+                        window.addEventListener('resize', this._on);
+                        window.addEventListener('scroll', this._on, true);
+                        this.$nextTick(() => this.go(0));
+                    },
+                    destroy() {
+                        window.removeEventListener('resize', this._on);
+                        window.removeEventListener('scroll', this._on, true);
+                    },
+                    get step() { return this.steps[this.i] || { title: '', text: '', target: '' }; },
+                    go(n) {
+                        this.i = Math.max(0, Math.min(this.steps.length - 1, n));
+                        const el = document.querySelector('[data-tour="' + (this.step.target || '') + '"]');
+                        if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+                        setTimeout(() => this.position(), 260);
+                    },
+                    position() {
+                        const el = document.querySelector('[data-tour="' + (this.step.target || '') + '"]');
+                        this.found = !! el;
+                        if (el) {
+                            const r = el.getBoundingClientRect(), pad = 6, gap = 12;
+                            this.rect = { top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 };
+                            if ((r.top + r.height / 2) < window.innerHeight / 2) {
+                                this.popTop = this.rect.top + this.rect.height + gap;
+                            } else {
+                                this.popTop = null;
+                                this.popBottom = window.innerHeight - this.rect.top + gap;
+                            }
+                        } else {
+                            this.rect = { top: -9999, left: 0, width: 0, height: 0 };
+                            this.popTop = Math.round(window.innerHeight / 2 - 90);
+                        }
+                    },
+                    next() { this.i < this.steps.length - 1 ? this.go(this.i + 1) : this.finish(); },
+                    back() { this.go(this.i - 1); },
+                    finish() { this.$wire.completeOnboarding(); },
+                }));
+            });
+        </script>
+
         {{-- ============================ HELP MODAL ============================ --}}
         <div class="rt-help-overlay" x-cloak x-show="help" @click.self="help = false" role="dialog" aria-modal="true" aria-label="How session credits work">
             <div class="rt-help-card">
                 <button type="button" class="rt-help-close" @click="help = false" aria-label="Close">✕</button>
                 <h3 class="rt-help-title">How session credits work</h3>
+                <button type="button" class="rt-linkbtn" @click="help = false" wire:click="openOnboarding" style="margin-bottom:.25rem">↺ Replay the getting-started guide</button>
                 <div class="rt-help-section">
                     <h4>The five rules</h4>
                     <ol class="rt-help-rules">
