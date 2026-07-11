@@ -66,6 +66,14 @@ Roster on a date = subscribers (offering's enrolments, always shown)
                  + walk-ins / make-ups added on that date
 ```
 
+### `is_open` gates new registrations only — never delivery
+An offering is offered on the **public booking site** only when `scopePubliclyBookable()` passes:
+`is_open = true` **and** `capacity > 0` **and** its `period` is this month or next. `is_open` is a
+pure sign-up gate — it does **not** touch existing enrolments, credits, or Run Training. Closing a
+month stops *new* bookings while every enrolled student's sessions still run and record normally.
+Admins flip it per-offering, or a **whole month at once** via the "Close a month" / "Open a month"
+header actions on Catalog → Timeslots (so no single programme gets missed).
+
 ### Credits are consumed by attendance, with a policy
 - Consumed by **present / late / absent**; an **excused** absence does *not* (it can be made
   up). A no-show still burns the credit — they held the slot.

@@ -7,6 +7,9 @@ follow their progress.
 - **Stack:** Laravel 13 · Filament v5 · Livewire · Tailwind (Vite) · Spatie Permission (Shield) · Pest.
 - **Payments:** hosted checkout + bank-transfer via the [`ejoi/payment-gateway`](https://packagist.org/packages/ejoi/payment-gateway) package.
 - **Staff panel:** `/app` (admin & coaches only — parents live on the public site).
+- **Coach console:** a mobile-first Home / Training / Students surface coaches land on after login,
+  with printable per-student progress reports.
+- **Branding:** the academy name is env-driven — set `APP_NAME` in `.env`, no template edits.
 
 ## Getting started
 
