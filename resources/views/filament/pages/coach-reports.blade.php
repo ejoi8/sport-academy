@@ -17,16 +17,30 @@
             </div>
         </div>
 
-        {{-- this month at a glance --}}
+        {{-- reporting window picker — drives every section below --}}
+        <div class="rt-card pad" style="display:flex; flex-direction:column; gap:.5rem;">
+            <span class="rt-fieldlabel">Report period</span>
+            <select wire:model.live="range">
+                @foreach($this->rangeOptions() as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+            </select>
+            @if($range === 'custom')
+                <div class="rt-row2">
+                    <input type="date" wire:model.live="from" aria-label="From">
+                    <input type="date" wire:model.live="to" aria-label="To">
+                </div>
+            @endif
+        </div>
+
+        {{-- the window at a glance --}}
         <div class="rt-stats">
             <div class="rt-stat"><div class="v">{{ $attendance['sessions_delivered'] }}</div><div class="k">Sessions</div></div>
             <div class="rt-stat good"><div class="v">{{ $attendance['total_marked'] > 0 ? $attendance['attendance_rate'].'%' : '—' }}</div><div class="k">Attendance</div></div>
             <div class="rt-stat"><div class="v">{{ $overall !== null ? number_format($overall, 1) : '—' }}</div><div class="k">Avg score</div></div>
         </div>
 
-        {{-- 6-month score trend --}}
+        {{-- score trend across the window (monthly or yearly buckets) --}}
         <div class="rt-section">
-            <div class="rt-rosterhead"><span class="t">Average score · last 6 months</span></div>
+            <div class="rt-rosterhead"><span class="t">Score trend · {{ $this->periodLabel() }}</span></div>
             <div class="rt-card pad">
                 <div class="rt-trend">
                     @foreach($trend as $t)
@@ -64,14 +78,14 @@
                         <span class="rt-badge {{ $row['rate'] >= 80 ? 'pay-active' : ($row['rate'] >= 60 ? 'carry' : 'pay-overdue') }}">{{ $row['attendances'] > 0 ? $row['rate'].'%' : '—' }}</span>
                     </div>
                 @empty
-                    <div class="rt-callout" style="padding:1.1rem 1rem">No sessions delivered this month yet.</div>
+                    <div class="rt-callout" style="padding:1.1rem 1rem">No sessions delivered in this period.</div>
                 @endforelse
             </div>
         </div>
 
-        {{-- all-time skill progress, per programme --}}
+        {{-- skill progress for the window, per programme --}}
         <div class="rt-section">
-            <div class="rt-rosterhead"><span class="t">Skill progress · all time</span></div>
+            <div class="rt-rosterhead"><span class="t">Skill progress · {{ $this->periodLabel() }}</span></div>
             @forelse($progress as $name => $data)
                 <div class="rt-card">
                     <div class="rt-defrow" style="border-bottom:1px solid var(--b)">

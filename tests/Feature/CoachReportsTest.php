@@ -68,7 +68,8 @@ it('renders the full report drill-down for a coach', function () {
     $this->get(CoachReports::getUrl())
         ->assertOk()
         ->assertSee('Full report')
-        ->assertSee('Average score')
+        ->assertSee('Report period')
+        ->assertSee('Score trend')
         ->assertSee('Skill progress');
 });
 
@@ -80,7 +81,28 @@ it('summarises the coach delivery, attendance and progress', function () {
     expect($component->instance()->attendance()['sessions_delivered'])->toBe(1)
         ->and($component->instance()->attendance()['attendance_rate'])->toBe(100.0)
         ->and($component->instance()->overallAverage())->toBe(4.0)
-        ->and($component->instance()->trend())->toHaveCount(6);
+        ->and($component->instance()->trend())->not->toBeEmpty();
+});
+
+it('reports over a chosen window (month, year, all-time, custom)', function () {
+    scoredSession($this->coach); // one session dated today
+
+    $component = Livewire::test(CoachReports::class)->assertSet('range', 'this-month');
+
+    // This month, this year and all-time all contain today's session.
+    foreach (['this-month', 'this-year', 'all'] as $range) {
+        $component->set('range', $range)->assertOk();
+        expect($component->instance()->attendance()['sessions_delivered'])->toBe(1)
+            ->and($component->instance()->trend())->not->toBeEmpty();
+    }
+
+    // A custom window that excludes today reports nothing.
+    $component->set('range', 'custom')
+        ->set('from', today()->subYears(2)->toDateString())
+        ->set('to', today()->subYear()->toDateString())
+        ->assertOk();
+
+    expect($component->instance()->attendance()['sessions_delivered'])->toBe(0);
 });
 
 it('scopes progress to the signed-in coach', function () {

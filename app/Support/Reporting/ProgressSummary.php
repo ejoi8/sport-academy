@@ -19,7 +19,7 @@ class ProgressSummary
      *     }>
      * }
      */
-    public static function build(?int $coachId = null): array
+    public static function build(?int $coachId = null, ?\Illuminate\Support\Carbon $from = null, ?\Illuminate\Support\Carbon $to = null): array
     {
         $rows = AssessmentScore::query()
             ->join('attendances', 'assessment_scores.attendance_id', '=', 'attendances.id')
@@ -30,6 +30,8 @@ class ProgressSummary
             // Pass a coach id to scope the roll-up to the sessions that coach assessed — that's how
             // the coach console shows "my players' progress" without a separate query.
             ->when($coachId, fn ($query) => $query->where('attendances.coach_id', $coachId))
+            // Optional date window (by session date) so the report can span any duration.
+            ->when($from && $to, fn ($query) => $query->whereBetween('training_sessions.session_date', [$from->toDateString(), $to->toDateString()]))
             ->selectRaw('programs.name as program, skills.name as skill, skills.sort_order as sort, count(*) as n, sum(assessment_scores.score) as total')
             ->groupBy('programs.name', 'skills.name', 'skills.sort_order')
             ->orderBy('programs.name')

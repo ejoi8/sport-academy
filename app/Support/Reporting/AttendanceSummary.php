@@ -23,18 +23,36 @@ class AttendanceSummary
      */
     public static function for(string $period, ?int $coachId = null): array
     {
-        $start = Carbon::parse($period.'-01')->startOfMonth()->toDateString();
-        $end = Carbon::parse($period.'-01')->endOfMonth()->toDateString();
+        $month = Carbon::parse($period.'-01');
+
+        return static::forRange($month->copy()->startOfMonth(), $month->copy()->endOfMonth(), $coachId);
+    }
+
+    /**
+     * The same roll-up over an arbitrary (inclusive) date range, so a report can span a day, month,
+     * year or custom window. `for()` is the single-month shorthand.
+     *
+     * @return array{
+     *     period:string, coach_id:?int, sessions_delivered:int,
+     *     present:int, late:int, absent:int, excused:int, attended:int, total_marked:int,
+     *     attendance_rate:float, no_show_rate:float,
+     *     by_program:array<string, array{sessions:int, attendances:int, attended:int, rate:float}>
+     * }
+     */
+    public static function forRange(Carbon $start, Carbon $end, ?int $coachId = null): array
+    {
+        $startStr = $start->toDateString();
+        $endStr = $end->toDateString();
 
         $sessions = TrainingSession::query()
-            ->whereBetween('session_date', [$start, $end])
+            ->whereBetween('session_date', [$startStr, $endStr])
             ->when($coachId, fn ($q) => $q->where('coach_id', $coachId))
             ->with('offering.program')
             ->get();
 
         $attendances = Attendance::query()
             ->whereHas('trainingSession', fn ($q) => $q
-                ->whereBetween('session_date', [$start, $end])
+                ->whereBetween('session_date', [$startStr, $endStr])
                 ->when($coachId, fn ($q) => $q->where('coach_id', $coachId)))
             ->with('trainingSession.offering.program')
             ->get();
@@ -75,7 +93,7 @@ class AttendanceSummary
         ksort($byProgram);
 
         return [
-            'period' => $period,
+            'period' => $start->format('Y-m'),
             'coach_id' => $coachId,
             'sessions_delivered' => $sessions->count(),
             'present' => $counts['present'],
