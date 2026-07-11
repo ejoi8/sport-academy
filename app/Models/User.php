@@ -36,6 +36,27 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Why this account can't be deleted, or null if it can. History we don't destroy — the panel
+     * (and DeletionGuard) surface this instead of orphaning children or coaching records; the fix
+     * is to remove the person's role, not delete the login.
+     */
+    public function deletionBlockedReason(): ?string
+    {
+        if ($this->students()->exists()) {
+            return 'This account is a parent with children on file — reassign or remove the children first, or just take away their role.';
+        }
+
+        $hasCoached = TrainingSession::where('coach_id', $this->id)->orWhere('created_by', $this->id)->exists()
+            || Attendance::where('coach_id', $this->id)->orWhere('marked_by', $this->id)->exists();
+
+        if ($hasCoached) {
+            return 'This account has coached or recorded training sessions — remove its coach role instead of deleting the history.';
+        }
+
+        return null;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
