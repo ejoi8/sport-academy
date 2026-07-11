@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AssessmentScore;
+use App\Models\Enrollment;
 use App\Models\Offering;
 use App\Models\Program;
 use App\Models\Skill;
@@ -40,11 +41,18 @@ it('seeds a usable baseline: rubric, catalog, and a coach login', function () {
 });
 
 it('seeds demo data sharing the same rubric, with history and scores', function () {
+    DemoSeeder::$historyMonths = 4; // small, fast slice of the 5-year dataset
     $this->seed(DemoSeeder::class);
 
-    // The rubric is shared, not duplicated: still 7 skills, not 14.
+    // The rubric is shared, not duplicated: still 7 skills, not 14. Three real programmes now.
     expect(Skill::query()->count())->toBe(7)
-        ->and(Program::count())->toBe(4)
+        ->and(Program::count())->toBe(3)
         ->and(TrainingSession::count())->toBeGreaterThan(0)
         ->and(AssessmentScore::count())->toBeGreaterThan(0);
+
+    // Current month is registered but not yet recorded: enrolments this month, zero sessions dated
+    // in the current month.
+    $currentPeriod = now()->format('Y-m');
+    expect(Enrollment::whereHas('offering', fn ($q) => $q->where('period', $currentPeriod))->count())->toBeGreaterThan(0)
+        ->and(TrainingSession::whereBetween('session_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])->count())->toBe(0);
 });

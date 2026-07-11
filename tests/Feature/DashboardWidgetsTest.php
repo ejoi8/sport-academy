@@ -22,6 +22,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     Filament::setCurrentPanel(Filament::getPanel('app'));
+    DemoSeeder::$historyMonths = 4; // keep the demo seed small + fast for tests
     $this->seed(DemoSeeder::class);
     // coach@academy.test is super_admin + coach, so it can view every widget.
     $this->coach = User::where('email', 'coach@academy.test')->firstOrFail();
