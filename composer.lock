@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f3d85fbeef60032b8cfdd088df3e6de9",
+    "content-hash": "3f08d35bde1845c9d44d5c30e345b2d8",
     "packages": [
         {
             "name": "bezhansalleh/filament-plugin-essentials",
@@ -1147,18 +1147,25 @@
         },
         {
             "name": "ejoi/payment-gateway",
-            "version": "dev-main",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/ejoi8/payment-gateway.git",
+                "reference": "3408bf91beaa853532290122c104e00ce0a3a51e"
+            },
             "dist": {
-                "type": "path",
-                "url": "../_packages/payment-gateway",
-                "reference": "11996e66e0e05c8f048be0a34f4cb3ea94a425f0"
+                "type": "zip",
+                "url": "https://api.github.com/repos/ejoi8/payment-gateway/zipball/3408bf91beaa853532290122c104e00ce0a3a51e",
+                "reference": "3408bf91beaa853532290122c104e00ce0a3a51e",
+                "shasum": ""
             },
             "require": {
                 "php": "^8.2",
                 "php-http/discovery": "^1.19",
                 "psr/http-client": "^1.0",
                 "psr/http-factory": "^1.0",
-                "psr/http-message": "^1.1 || ^2.0"
+                "psr/http-message": "^1.1 || ^2.0",
+                "psr/simple-cache": "^2.0 || ^3.0"
             },
             "require-dev": {
                 "guzzlehttp/guzzle": "^7.8",
@@ -1172,12 +1179,12 @@
             "type": "library",
             "extra": {
                 "laravel": {
-                    "providers": [
-                        "Ejoi\\PaymentGateway\\Laravel\\PaymentGatewayServiceProvider"
-                    ],
                     "aliases": {
                         "PaymentGateway": "Ejoi\\PaymentGateway\\Laravel\\Facades\\PaymentGateway"
-                    }
+                    },
+                    "providers": [
+                        "Ejoi\\PaymentGateway\\Laravel\\PaymentGatewayServiceProvider"
+                    ]
                 }
             },
             "autoload": {
@@ -1185,11 +1192,7 @@
                     "Ejoi\\PaymentGateway\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Ejoi\\PaymentGateway\\Tests\\": "tests/"
-                }
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -1201,20 +1204,21 @@
             ],
             "description": "A modular, framework-agnostic PHP payment gateway abstraction with drivers for Malaysian and global providers (CHIP, Billplz, toyyibPay, Stripe, PayPal).",
             "keywords": [
+                "Malaysia",
                 "billplz",
                 "chip",
                 "fpx",
                 "gateway",
-                "malaysia",
                 "payment",
                 "paypal",
                 "stripe",
                 "toyyibpay"
             ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/ejoi8/payment-gateway/issues",
+                "source": "https://github.com/ejoi8/payment-gateway/tree/v1.0.0"
+            },
+            "time": "2026-07-07T15:53:32+00:00"
         },
         {
             "name": "filament/actions",
@@ -12303,9 +12307,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "ejoi/payment-gateway": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

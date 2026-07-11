@@ -97,12 +97,16 @@ score pills, notes. One card open at a time; unsaved edits lock the rest.
 
 ## Payments
 
-A local path package, `ejoi/payment-gateway` (composer path repo, `dev-main`, at
-`../_packages/payment-gateway` relative to this repo — see `composer.json`'s `repositories`
-entry), provides gateway-agnostic hosted checkout + a manual bank-transfer flow. **Never modify
-the package** — app-side code only (`app/Http/Controllers/Payments/`, `app/Listeners/`,
-`app/Models/GatewayPayment.php`, `app/Support/PaymentInstructions.php`, `app/Livewire/PublicSite/
-ProofUpload.php`, `app/Filament/Resources/Payments/`, `config/payment-gateway.php`).
+The published Composer package [`ejoi/payment-gateway`](https://packagist.org/packages/ejoi/payment-gateway)
+(`^1.0`, installed from Packagist — see `composer.json`'s `require`) provides gateway-agnostic hosted
+checkout + a manual bank-transfer flow. It's a normal vendor dependency now — bump it with
+`composer update ejoi/payment-gateway`. **Never edit it in `vendor/`** — app-side code only
+(`app/Http/Controllers/Payments/`, `app/Listeners/`, `app/Models/GatewayPayment.php`,
+`app/Support/PaymentInstructions.php`, `app/Livewire/PublicSite/ProofUpload.php`,
+`app/Filament/Resources/Payments/`, `config/payment-gateway.php`).
+
+> History: this started as a local path package (`../_packages/payment-gateway`, `dev-main`); it was
+> published to Packagist as v1.0.0 and the app now depends on the released version.
 
 **The flow, end to end:**
 

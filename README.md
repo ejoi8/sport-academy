@@ -5,6 +5,7 @@ Management app for a football training academy — a **Filament staff panel** (a
 follow their progress.
 
 - **Stack:** Laravel 13 · Filament v5 · Livewire · Tailwind (Vite) · Spatie Permission (Shield) · Pest.
+- **Payments:** hosted checkout + bank-transfer via the [`ejoi/payment-gateway`](https://packagist.org/packages/ejoi/payment-gateway) package.
 - **Staff panel:** `/app` (admin & coaches only — parents live on the public site).
 
 ## Getting started
