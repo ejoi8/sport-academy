@@ -190,15 +190,17 @@ class DemoSeeder extends Seeder
                 'is_open' => true,
             ]);
 
-            $now = now();
+            // Registration is dated to the month it's for (next month = registered now), so any
+            // created_at-based reporting lines up with the real timeline.
+            $enrolledAt = ($m >= 0 ? $monthStart : now())->toDateTimeString();
             DB::table('enrollments')->insert(array_map(fn (int $sid): array => [
                 'student_id' => $sid,
                 'offering_id' => $offering->id,
                 'status' => 'active',
                 'price_sen' => $feeSen,
                 'sessions_included' => 4,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'created_at' => $enrolledAt,
+                'updated_at' => $enrolledAt,
             ], array_keys($roster)));
 
             /** @var array<int, int> student_id => enrollment_id */
@@ -222,7 +224,9 @@ class DemoSeeder extends Seeder
      */
     private function recordSession(int $offeringId, Carbon $date, int $sessionIndex, array $roster, array $enrIds, int $coachId, int $monthsAgo): void
     {
-        $now = now();
+        // Stamp the session/attendance/score rows with the session's own date so created_at-based
+        // reports (score trend, monthly stats) reflect the real 5-year timeline, not the seed run.
+        $now = $date->toDateTimeString();
 
         $sessionId = DB::table('training_sessions')->insertGetId([
             'offering_id' => $offeringId,
