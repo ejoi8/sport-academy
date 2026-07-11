@@ -35,6 +35,10 @@
                     <div class="rt-crumb">Student</div>
                     <h1 style="font-size:1.05rem;">{{ $student->name }}</h1>
                 </div>
+                {{-- The same printable report parents/admins get — opens in a new tab (route allows coaches). --}}
+                <a href="{{ route('students.report', $student) }}" target="_blank" rel="noopener" class="rt-iconbtn" title="View / print report" aria-label="View or print report">
+                    <svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg>
+                </a>
                 @if($student->is_active)
                     <span class="rt-status saved"><span class="led"></span>Active</span>
                 @else

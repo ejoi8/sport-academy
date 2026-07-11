@@ -99,6 +99,18 @@ it('drops a stale student id back to the list', function () {
         ->assertSet('studentId', null);
 });
 
+it('links the printable report from the profile, and a coach can open it', function () {
+    $student = Student::create(['name' => 'Report Kid', 'is_active' => true]);
+
+    // The profile surfaces the same printable report parents/admins get.
+    Livewire::test(Students::class)
+        ->set('studentId', $student->id)
+        ->assertSee(route('students.report', $student));
+
+    // And the signed-in coach is actually allowed to open it.
+    $this->get(route('students.report', $student))->assertOk();
+});
+
 it('pages the roster with load more', function () {
     foreach (range(1, 45) as $i) {
         Student::create(['name' => sprintf('Kid %02d', $i), 'is_active' => true]);
