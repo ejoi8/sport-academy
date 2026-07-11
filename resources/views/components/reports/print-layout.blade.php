@@ -40,7 +40,7 @@
                 <h1>{{ $title }}</h1>
                 @if($subtitle)<div class="sub">{{ $subtitle }}</div>@endif
             </div>
-            <div class="academy">Football Academy<span class="gen">Generated {{ now()->format('j M Y, H:i') }}</span></div>
+            <div class="academy">{{ config('app.name') ?: 'Academy' }}<span class="gen">Generated {{ now()->format('j M Y, H:i') }}</span></div>
         </div>
 
         {{ $slot }}
