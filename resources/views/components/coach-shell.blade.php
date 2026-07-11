@@ -152,6 +152,18 @@
     .rt-histrow .dt{ font-weight:800; font-size:.84rem; }
     .rt-histrow .sl{ font-size:.72rem; color:var(--mut); }
 
+    /* skill level meters — a labelled 0–5 bar per skill, coloured by level */
+    .rt-meter{ display:flex; flex-direction:column; gap:.6rem; }
+    .rt-meter .m{ display:flex; flex-direction:column; gap:.3rem; }
+    .rt-meter .head{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }
+    .rt-meter .nm{ font-size:.84rem; font-weight:600; min-width:0; }
+    .rt-meter .val{ font-size:.82rem; font-weight:800; font-variant-numeric:tabular-nums; flex:none; }
+    .rt-meter .track{ height:.5rem; background:var(--soft); border:1px solid var(--b); border-radius:999px; overflow:hidden; }
+    .rt-meter .fill{ height:100%; border-radius:999px; min-width:.35rem; }
+    .rt-meter .fill.hi{ background:var(--ok); }
+    .rt-meter .fill.mid{ background-image:linear-gradient(90deg,var(--ac),var(--ac2)); }
+    .rt-meter .fill.lo{ background:var(--wa); }
+
     /* mini bar chart (reports) — CSS-only columns, no chart lib */
     .rt-trend{ display:flex; align-items:flex-end; gap:.5rem; height:7.5rem; }
     .rt-trend .bar{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:.25rem; height:100%; min-width:0; }

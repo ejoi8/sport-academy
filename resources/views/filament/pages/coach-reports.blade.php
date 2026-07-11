@@ -87,14 +87,24 @@
         <div class="rt-section">
             <div class="rt-rosterhead"><span class="t">Skill progress · {{ $this->periodLabel() }}</span></div>
             @forelse($progress as $name => $data)
-                <div class="rt-card">
-                    <div class="rt-defrow" style="border-bottom:1px solid var(--b)">
+                <div class="rt-card pad">
+                    <div class="rt-defrow" style="border-bottom:1px solid var(--b); padding-top:0">
                         <span class="k" style="color:var(--ink); font-weight:800">{{ $name }}</span>
                         <span class="v">{{ number_format($data['overall_average'], 1) }} <span class="rt-muted">avg · {{ $data['total_scores'] }} scores</span></span>
                     </div>
-                    @foreach($data['skills'] as $skill)
-                        <div class="rt-defrow"><span class="k">{{ $skill['skill'] }}</span><span class="v">{{ number_format($skill['average'], 1) }} <span class="rt-muted">· {{ $skill['count'] }}×</span></span></div>
-                    @endforeach
+                    <div class="rt-meter" style="margin-top:.6rem">
+                        @foreach($data['skills'] as $skill)
+                            @php($avg = (float) $skill['average'])
+                            @php($lvl = $avg >= 3.5 ? 'hi' : ($avg >= 2.5 ? 'mid' : 'lo'))
+                            <div class="m">
+                                <div class="head">
+                                    <span class="nm">{{ $skill['skill'] }}</span>
+                                    <span class="val">{{ number_format($avg, 1) }} <span class="rt-muted">/5 · {{ $skill['count'] }}×</span></span>
+                                </div>
+                                <div class="track"><div class="fill {{ $lvl }}" style="width:{{ max(4, round($avg / 5 * 100)) }}%"></div></div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             @empty
                 <div class="rt-callout">No assessments recorded yet — scores you log in Run Training show up here.</div>

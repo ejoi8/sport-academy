@@ -21,15 +21,24 @@
     {{-- skill averages earned under this enrolment --}}
     <div class="rt-section">
         <div class="rt-rosterhead"><span class="t">Skill averages</span></div>
-        <div class="rt-card">
-            @forelse($report['skills'] as $row)
-                <div class="rt-defrow">
-                    <span class="k">{{ $row['skill'] }}</span>
-                    <span class="v">{{ number_format($row['average'], 1) }} <span class="rt-muted">· {{ $row['count'] }}×</span></span>
+        <div class="rt-card pad">
+            @if(! empty($report['skills']))
+                <div class="rt-meter">
+                    @foreach($report['skills'] as $row)
+                        @php($avg = (float) $row['average'])
+                        @php($lvl = $avg >= 3.5 ? 'hi' : ($avg >= 2.5 ? 'mid' : 'lo'))
+                        <div class="m">
+                            <div class="head">
+                                <span class="nm">{{ $row['skill'] }}</span>
+                                <span class="val">{{ number_format($avg, 1) }} <span class="rt-muted">/5 · {{ $row['count'] }}×</span></span>
+                            </div>
+                            <div class="track"><div class="fill {{ $lvl }}" style="width:{{ max(4, round($avg / 5 * 100)) }}%"></div></div>
+                        </div>
+                    @endforeach
                 </div>
-            @empty
+            @else
                 <div class="rt-muted" style="padding:.4rem .1rem">No skill scores recorded under this enrolment yet.</div>
-            @endforelse
+            @endif
         </div>
     </div>
 
